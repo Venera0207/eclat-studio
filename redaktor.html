@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Редактор сайта ÉCLAT STUDIO — правки без кода</title>
+<style>
+  :root{--bg:#F6F5FB;--card:#fff;--line:#E3E0EF;--ink:#1B1826;--muted:#6B6580;--accent:#6D28D9;--accent-soft:#F0EAFF;
+    --ok:#0F7B4F;--ok-bg:#E7F7EF;--warn:#9A5B00;--warn-bg:#FFF6E2;--bad:#B4232A;--bad-bg:#FFEDEF}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.5}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 16px 90px}
+  header.top{background:var(--card);border-bottom:1px solid var(--line);padding:18px 0 14px;margin-bottom:16px}
+  h1{font-size:26px;margin:0 0 4px} h2{font-size:20px;margin:0 0 8px} h3{font-size:17px;margin:0 0 6px}
+  .tagline{color:var(--muted);margin:0}
+  .warnbar{background:var(--warn-bg);border:1px solid #F0D9A8;border-left:6px solid #E0A020;border-radius:12px;padding:12px 16px;margin-bottom:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:14px}
+  .card.tight{padding:12px 16px}
+  .muted{color:var(--muted)} .small{font-size:14px}
+  .hidden{display:none}
+  .btn{border:0;border-radius:11px;padding:11px 20px;font-size:16px;font-weight:600;cursor:pointer;background:var(--accent);color:#fff;font-family:inherit}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:#fff;color:var(--accent);border:2px solid var(--accent);padding:9px 18px}
+  .btn.grey{background:#EFEDF7;color:#3B3550}
+  .btn.green{background:var(--ok)}
+  .btn.danger{background:#fff;color:var(--bad);border:2px solid #F0C3C7;padding:6px 12px;font-size:14px}
+  .btn.small{padding:7px 13px;font-size:14px;border-radius:9px}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .drop{border:2px dashed var(--accent);border-radius:14px;background:var(--accent-soft);padding:26px;text-align:center;color:var(--accent);font-weight:600;cursor:pointer;margin-bottom:12px}
+  .drop.over{background:#E4D9FF}
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .tabs button{background:#fff;border:2px solid var(--line);border-radius:11px;padding:9px 16px;font-size:15px;font-weight:600;color:#4A4460;cursor:pointer;font-family:inherit}
+  .tabs button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+  .grid .full{grid-column:1/-1}
+  label.f{display:block;font-size:13.5px;font-weight:700;color:var(--muted);margin:0 0 4px}
+  input[type=text],input[type=number],textarea,select{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:15px;font-family:inherit;background:#fff}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(109,40,217,.15)}
+  .item{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:12px;background:#FCFBFF}
+  .item .head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+  .check{display:flex;gap:8px;align-items:center;font-size:14.5px;cursor:pointer}
+  .check input{width:18px;height:18px;accent-color:var(--accent)}
+  .dows{display:flex;gap:6px;flex-wrap:wrap}
+  .dows label{background:#EFEDF7;border-radius:8px;padding:5px 9px;font-size:13.5px;cursor:pointer}
+  .dows label.on{background:var(--accent-soft);color:var(--accent);font-weight:700}
+  .errs{background:var(--bad-bg);border:1.5px solid #F0C3C7;color:var(--bad);border-radius:12px;padding:10px 14px;margin-top:10px}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:#221C35;color:#fff;border-radius:12px;padding:12px 20px;font-size:15px;opacity:0;pointer-events:none;transition:.25s;max-width:90vw}
+  .toast.on{opacity:1;transform:translateX(-50%)}
+  .toast.good{background:var(--ok)} .toast.err{background:var(--bad)}
+  code{background:#EFEDF7;border-radius:6px;padding:1px 6px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap" style="padding-bottom:0">
+  <h1>Редактор сайта ÉCLAT STUDIO</h1>
+  <p class="tagline">Цены, услуги, мастера, контакты и тексты — полями, без строк кода.</p>
+</div></header>
+<div class="wrap">
+  <div class="warnbar"><b>Как это работает:</b> откройте файл <code>site-data.js</code> из папки сайта → правьте содержимое во вкладках →
+    «Скачать файл» отдаст обновлённый <code>site-data.js</code> → замените им старый файл в папке сайта (или в репозитории GitHub).
+    Черновик хранится в браузере: случайно закрыли вкладку — ничего не пропало.</div>
+
+  <div class="card" id="start">
+    <h2>Шаг 1. Открыть файл содержимого</h2>
+    <div class="drop" id="drop">Перетащите site-data.js сюда</div>
+    <div class="row"><button class="btn" id="btn-pick">Выбрать файл…</button>
+      <span class="muted small">файл лежит в корне папки сайта, рядом с index.html</span></div>
+    <input type="file" id="file" accept=".js,text/javascript" hidden>
+  </div>
+
+  <div id="work" class="hidden">
+    <div class="tabs" id="tabs"></div>
+    <div class="card" id="tab-body"></div>
+    <div class="card tight row">
+      <button class="btn green" id="btn-save">Скачать файл</button>
+      <button class="btn ghost" id="btn-copy">Скопировать содержимое</button>
+      <button class="btn grey" id="btn-backup">Запасная копия</button>
+      <span class="muted small" id="status"></span>
+    </div>
+    <div id="save-errors"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+var D = null, originalSrc = '', dirty = false, curTab = 'site';
+var KEY = 'eclat_redaktor_draft_v1';
+var $ = function (s) { return document.querySelector(s); };
+var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+var DOW = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+/* ---------- вкладки ---------- */
+var TABS = [
+  { id: 'site', t: 'Сайт и контакты' }, { id: 'services', t: 'Услуги и цены' },
+  { id: 'masters', t: 'Мастера' }, { id: 'gallery', t: 'Галерея' },
+  { id: 'texts', t: 'Тексты' }, { id: 'discount', t: 'Скидка' }, { id: 'help', t: 'Памятка' }
+];
+function renderTabs() {
+  $('#tabs').innerHTML = TABS.map(function (t) {
+    return '<button data-tab="' + t.id + '" class="' + (curTab === t.id ? 'on' : '') + '">' + t.t + '</button>';
+  }).join('');
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-tab]');
+  if (b) { curTab = b.getAttribute('data-tab'); renderTabs(); fillTab(); }
+});
+
+/* ---------- чтение файла ---------- */
+function parseSrc(src) {
+  var fn = new Function(src + '\n;return {SITE:SITE,SETTINGS:SETTINGS,DISCOUNT:DISCOUNT,MASTERS:MASTERS,SERVICES:SERVICES,GALLERY:GALLERY,TEXTS:TEXTS,REVIEWS:REVIEWS};');
+  return fn();
+}
+function loadFromFile(f) {
+  var r = new FileReader();
+  r.onload = function () {
+    originalSrc = String(r.result);
+    try {
+      D = JSON.parse(JSON.stringify(parseSrc(originalSrc)));
+    } catch (e) {
+      toast('⚠ Не удалось прочитать файл: ' + e.message, 'err', 5000); return;
+    }
+    dirty = false;
+    $('#start').classList.add('hidden'); $('#work').classList.remove('hidden');
+    renderTabs(); fillTab(); updateStatus();
+    toast('✔ Файл открыт — правьте содержимое во вкладках', 'good');
+  };
+  r.readAsText(f, 'UTF-8');
+}
+$('#btn-pick').addEventListener('click', function () { $('#file').click(); });
+$('#file').addEventListener('change', function () { if ($('#file').files[0]) loadFromFile($('#file').files[0]); });
+var drop = $('#drop');
+['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) loadFromFile(f); });
+drop.addEventListener('click', function () { $('#file').click(); });
+
+/* ---------- пути данных ---------- */
+function setPath(path, v) {
+  var parts = path.split('.'), o = D;
+  for (var i = 0; i < parts.length - 1; i++) o = o[isNaN(parts[i]) ? parts[i] : +parts[i]];
+  o[isNaN(parts[parts.length - 1]) ? parts[parts.length - 1] : +parts[parts.length - 1]] = v;
+}
+function getPath(path) {
+  var parts = path.split('.'), o = D;
+  for (var i = 0; i < parts.length; i++) o = o[isNaN(parts[i]) ? parts[i] : +parts[i]];
+  return o;
+}
+document.addEventListener('input', onEdit);
+document.addEventListener('change', onEdit);
+function onEdit(e) {
+  var t = e.target, p = t.getAttribute && t.getAttribute('data-path');
+  if (!p || !D) return;
+  var v;
+  if (t.type === 'checkbox') v = t.checked;
+  else if (t.getAttribute('data-num') === '1') v = t.value === '' ? 0 : Number(t.value);
+  else v = t.value;
+  setPath(p, v); dirty = true; updateStatus(); saveLocal();
+  if (t.getAttribute('data-days')) renderDows(t);
+}
+/* дни недели мастеров */
+document.addEventListener('change', function (e) {
+  var t = e.target, dp = t.getAttribute && t.getAttribute('data-days');
+  if (!dp || !D) return;
+  var dow = +t.getAttribute('data-dow');
+  var sch = getPath(dp).schedule; sch.days = sch.days || [];
+  var ix = sch.days.indexOf(dow);
+  if (t.checked && ix < 0) sch.days.push(dow);
+  if (!t.checked && ix >= 0) sch.days.splice(ix, 1);
+  sch.days.sort(); dirty = true; saveLocal();
+});
+function renderDows(t) {
+  var wrap = t.closest('.dows');
+  if (!wrap) return;
+  wrap.querySelectorAll('label').forEach(function (l) {
+    l.classList.toggle('on', l.querySelector('input').checked);
+  });
+}
+
+/* ---------- рендер вкладок ---------- */
+function fld(label, path, opts) {
+  opts = opts || {};
+  var v = getPath(path);
+  var id = 'f_' + path.replace(/\W/g, '_');
+  var ctrl;
+  if (opts.area) ctrl = '<textarea id="' + id + '" rows="' + (opts.rows || 3) + '" data-path="' + path + '">' + esc(v) + '</textarea>';
+  else if (opts.select) ctrl = '<select id="' + id + '" data-path="' + path + '">' + opts.select.map(function (o) {
+    return '<option value="' + o[0] + '"' + (v === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
+  else ctrl = '<input id="' + id + '" type="' + (opts.num ? 'number' : 'text') + '"' + (opts.num ? ' data-num="1"' : '') +
+    ' value="' + esc(v) + '" data-path="' + path + '">';
+  return '<div class="' + (opts.full ? 'full' : '') + '"><label class="f" for="' + id + '">' + label + '</label>' + ctrl + '</div>';
+}
+function chk(label, path) {
+  return '<label class="check"><input type="checkbox" data-path="' + path + '"' + (getPath(path) ? ' checked' : '') + '><span>' + label + '</span></label>';
+}
+function fillTab() {
+  var b = $('#tab-body'), h = '';
+  if (curTab === 'site') {
+    h = '<h2>Сайт и контакты</h2><div class="grid">' +
+      fld('Название салона', 'SITE.name') + fld('Слоган', 'SITE.slogan') +
+      fld('Телефон (как показывать)', 'SITE.phone') + fld('Телефон без пробелов', 'SITE.phoneRaw') +
+      fld('Код для WhatsApp (цифры)', 'SITE.whatsapp') + fld('Почта для заявок', 'SITE.email') +
+      fld('Адрес', 'SITE.address', { full: 1 }) + fld('Метро / ориентир', 'SITE.metro') +
+      fld('График (текст)', 'SITE.hours') + fld('Открытие, ЧЧ:ММ', 'SITE.open') +
+      fld('Закрытие, ЧЧ:ММ', 'SITE.close') + fld('Часовой пояс', 'SITE.timezone') +
+      fld('Ссылка карты (mapSrc)', 'SITE.mapSrc', { full: 1, area: 1, rows: 2 }) +
+      fld('Текст под заголовком (lead)', 'SITE.lead', { full: 1, area: 1 }) +
+      '</div><h3 style="margin-top:14px">Режимы записи</h3><div class="grid">' +
+      fld('Адрес сервера записи (pipeUrl)', 'SETTINGS.pipeUrl', { full: 1 }) +
+      fld('Адрес трубы ИИ-ассистента (assistantUrl)', 'SETTINGS.assistantUrl', { full: 1 }) +
+      fld('Шаг сетки времени, мин', 'SETTINGS.slotStep', { num: 1 }) +
+      fld('Буфер между записями, мин', 'SETTINGS.bufferMin', { num: 1 }) +
+      fld('Запись вперёд на дней', 'SETTINGS.maxDaysAhead', { num: 1 }) +
+      '</div>';
+  }
+  if (curTab === 'services') {
+    h = '<h2>Услуги и цены</h2><p class="muted small">Цена в рублях, длительность в минутах — её учитывает запись. Мастеры — идентификаторы через запятую (см. вкладку «Мастера»).</p>';
+    D.SERVICES.forEach(function (s, i) {
+      h += '<div class="item"><div class="head"><b>' + esc(s.title || 'услуга') + '</b>' +
+        '<button class="btn danger" data-del-svc="' + i + '">удалить</button></div><div class="grid">' +
+        fld('Название', 'SERVICES.' + i + '.title') +
+        '<div><label class="f">Направление</label><select data-path="SERVICES.' + i + '.cat">' +
+        [['women', 'женское'], ['men', 'мужское'], ['kids', 'детское']].map(function (o) {
+          return '<option value="' + o[0] + '"' + (s.cat === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+        fld('Цена, ₽', 'SERVICES.' + i + '.price', { num: 1 }) +
+        fld('Длительность, мин', 'SERVICES.' + i + '.minutes', { num: 1 }) +
+        fld('Фото (путь)', 'SERVICES.' + i + '.photo', { full: 1 }) +
+        fld('Описание', 'SERVICES.' + i + '.desc', { full: 1, area: 1, rows: 2 }) +
+        fld('Мастера (id через запятую)', 'SERVICES.' + i + '.masters', { full: 1 }) +
+        '</div><div class="row" style="margin-top:8px">' +
+        chk('Пенсионная скидка применима', 'SERVICES.' + i + '.pension') +
+        chk('Услуга активна (показывать)', 'SERVICES.' + i + '.active') + '</div></div>';
+    });
+    h += '<button class="btn" id="add-svc">+ Добавить услугу</button>';
+  }
+  if (curTab === 'masters') {
+    h = '<h2>Мастера</h2><p class="muted small">Id мастера используется в услугах. Демо-пометка честно говорит посетителям, что профиль демонстрационный.</p>';
+    D.MASTERS.forEach(function (m, i) {
+      var sch = m.schedule || { days: [], start: '09:00', end: '21:00', breaks: [] };
+      h += '<div class="item"><div class="head"><b>' + esc(m.name || 'мастер') + ' <span class="muted small">(' + esc(m.id) + ')</span></b>' +
+        '<button class="btn danger" data-del-master="' + i + '">удалить</button></div><div class="grid">' +
+        fld('Имя', 'MASTERS.' + i + '.name') + fld('Id (латиницей)', 'MASTERS.' + i + '.id') +
+        fld('Роль / специализация', 'MASTERS.' + i + '.role', { full: 1 }) +
+        fld('Описание', 'MASTERS.' + i + '.desc', { full: 1, area: 1, rows: 2 }) +
+        fld('Фото (путь)', 'MASTERS.' + i + '.photo', { full: 1 }) +
+        fld('Начало дня, ЧЧ:ММ', 'MASTERS.' + i + '.schedule.start') +
+        fld('Конец дня, ЧЧ:ММ', 'MASTERS.' + i + '.schedule.end') +
+        '<div class="full"><label class="f">Рабочие дни</label><div class="dows">' +
+        [1, 2, 3, 4, 5, 6, 0].map(function (d, ix) {
+          return '<label class="' + ((sch.days || []).indexOf(d) >= 0 ? 'on' : '') + '"><input type="checkbox" data-days="MASTERS.' + i + '" data-dow="' + d + '"' +
+            ((sch.days || []).indexOf(d) >= 0 ? ' checked' : '') + '> ' + DOW[ix] + '</label>';
+        }).join('') + '</div></div>' +
+        '<div class="full"><label class="f">Перерывы (через запятую, ЧЧ:ММ-ЧЧ:ММ)</label><input type="text" data-breaks="MASTERS.' + i + '" value="' +
+        esc((sch.breaks || []).map(function (x) { return x.start + '-' + x.end; }).join(', ')) + '"></div>' +
+        '<div class="full"><label class="f">Отпуск / выходные даты (через запятую: ДАТА или ДАТА..ДАТА)</label><input type="text" data-vac="MASTERS.' + i + '" value="' +
+        esc((m.vacation || []).map(function (x) { return typeof x === 'string' ? x : x.from + '..' + x.to; }).join(', ')) + '"></div>' +
+        '</div><div class="row" style="margin-top:8px">' +
+        chk('Мастер активен', 'MASTERS.' + i + '.active') + chk('Демо-профиль (пометка на сайте)', 'MASTERS.' + i + '.demo') + '</div></div>';
+    });
+    h += '<button class="btn" id="add-master">+ Добавить мастера</button>';
+  }
+  if (curTab === 'gallery') {
+    h = '<h2>Галерея</h2>';
+    D.GALLERY.forEach(function (g, i) {
+      h += '<div class="item"><div class="head"><b>' + esc(g.caption) + '</b><button class="btn danger" data-del-gal="' + i + '">удалить</button></div><div class="grid">' +
+        fld('Фото (путь)', 'GALLERY.' + i + '.src') + fld('Подпись', 'GALLERY.' + i + '.caption') + '</div></div>';
+    });
+    h += '<button class="btn" id="add-gal">+ Добавить фото</button>';
+  }
+  if (curTab === 'texts') {
+    h = '<h2>Тексты</h2><div class="grid">' +
+      fld('Бегущая строка (через •)', 'TEXTS.marquee', { full: 1, area: 1, rows: 2 }) +
+      fld('Заголовок «О салоне»', 'TEXTS.aboutTitle') +
+      fld('Текст «О салоне»', 'TEXTS.aboutText', { full: 1, area: 1, rows: 4 }) +
+      fld('Подпись блока отзывов', 'TEXTS.reviewsNote', { full: 1, area: 1, rows: 2 }) +
+      fld('Текст согласия', 'TEXTS.consent', { full: 1 }) +
+      fld('Подпись об оплате', 'TEXTS.payNote', { full: 1 }) + '</div>';
+  }
+  if (curTab === 'discount') {
+    h = '<h2>Пенсионная скидка</h2><div class="grid">' +
+      fld('Размер, %', 'DISCOUNT.percent', { num: 1 }) +
+      '<div class="full">' + chk('Скидка включена', 'DISCOUNT.enabled') + '</div>' +
+      fld('Заголовок', 'DISCOUNT.title', { full: 1 }) + fld('Подзаголовок', 'DISCOUNT.subtitle', { full: 1 }) +
+      fld('Условия (текст для клиентов)', 'DISCOUNT.terms', { full: 1, area: 1, rows: 3 }) +
+      '<div class="full">' + chk('Суммируется с другими акциями', 'DISCOUNT.stackable') + '</div></div>';
+  }
+  if (curTab === 'help') {
+    h = '<h2>Памятка</h2><ul>' +
+      '<li>Фото кладите в папку <code>img/</code> и пишите путь вида <code>img/имя.jpg</code>.</li>' +
+      '<li>Новый мастер: добавьте его, задайте id (например, <code>m5</code>), затем впишите этот id в услуги, которые он выполняет.</li>' +
+      '<li>Цены меняются здесь; история уже созданных записей хранит свою цену и не поменяется задним числом.</li>' +
+      '<li>Поле «Адрес сервера записи» заполняется после подключения трубы (backend/README.md). Пусто = демо-режим.</li>' +
+      '<li>После скачивания файла замените им <code>site-data.js</code> в папке сайта и загрузьте на GitHub.</li></ul>';
+  }
+  b.innerHTML = h;
+  bindStruct(b);
+}
+
+/* ---------- перерывы и отпуска текстом ---------- */
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (!D || !t.getAttribute) return;
+  var db = t.getAttribute('data-breaks');
+  if (db) {
+    var arr = String(t.value).split(',').map(function (s) { return s.trim(); }).filter(Boolean).map(function (s) {
+      var p = s.split('-'); return { start: p[0].trim(), end: (p[1] || p[0]).trim() };
+    });
+    getPath(db).schedule.breaks = arr; dirty = true; saveLocal(); return;
+  }
+  var dv = t.getAttribute('data-vac');
+  if (dv) {
+    var v = String(t.value).split(',').map(function (s) { return s.trim(); }).filter(Boolean).map(function (s) {
+      if (s.indexOf('..') >= 0) { var p = s.split('..'); return { from: p[0].trim(), to: p[1].trim() }; }
+      return s;
+    });
+    getPath(dv).vacation = v; dirty = true; saveLocal();
+  }
+});
+/* мастера услуг: текст → массив */
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (!D || !t.getAttribute) return;
+  var p = t.getAttribute('data-path') || '';
+  if (/^SERVICES\.\d+\.masters$/.test(p)) {
+    var ids = String(t.value).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    setPath(p, ids); dirty = true; saveLocal();
+  }
+});
+
+/* ---------- добавить / удалить ---------- */
+function bindStruct(b) {
+  var q = function (s) { return b.querySelector(s); };
+  if (q('#add-svc')) q('#add-svc').addEventListener('click', function () {
+    D.SERVICES.push({ id: 'w' + (D.SERVICES.length + 1), cat: 'women', title: 'Новая услуга', price: 1000, minutes: 60, photo: 'img/women-hall.jpg', pension: true, masters: [], desc: '', active: true });
+    dirty = true; fillTab();
+  });
+  if (q('#add-master')) q('#add-master').addEventListener('click', function () {
+    D.MASTERS.push({ id: 'm' + (D.MASTERS.length + 1), name: 'Новый мастер', role: '', desc: '', photo: 'img/master-1.jpg', active: true, demo: true, schedule: { days: [1, 2, 3, 4, 5], start: '09:00', end: '21:00', breaks: [] }, vacation: [] });
+    dirty = true; fillTab();
+  });
+  if (q('#add-gal')) q('#add-gal').addEventListener('click', function () {
+    D.GALLERY.push({ src: 'img/hero-interior.jpg', caption: 'Новое фото' }); dirty = true; fillTab();
+  });
+  b.querySelectorAll('[data-del-svc]').forEach(function (x) {
+    x.addEventListener('click', function () { if (confirm('Удалить услугу «' + D.SERVICES[+x.getAttribute('data-del-svc')].title + '»?')) { D.SERVICES.splice(+x.getAttribute('data-del-svc'), 1); dirty = true; fillTab(); } });
+  });
+  b.querySelectorAll('[data-del-master]').forEach(function (x) {
+    x.addEventListener('click', function () { if (confirm('Удалить мастера «' + D.MASTERS[+x.getAttribute('data-del-master')].name + '»? Записи в базе останутся.')) { D.MASTERS.splice(+x.getAttribute('data-del-master'), 1); dirty = true; fillTab(); } });
+  });
+  b.querySelectorAll('[data-del-gal]').forEach(function (x) {
+    x.addEventListener('click', function () { D.GALLERY.splice(+x.getAttribute('data-del-gal'), 1); dirty = true; fillTab(); });
+  });
+}
+
+/* ---------- проверка и сборка файла ---------- */
+function validate() {
+  var e = [];
+  if (!D.SITE.name) e.push('Укажите название салона.');
+  if (!/^[^@]+@[^@]+\.[^@]+$/.test(D.SITE.email || '')) e.push('Почта для заявок выглядит неправильно.');
+  if (D.SITE.open && D.SITE.close && D.SITE.open >= D.SITE.close) e.push('Время закрытия должно быть позже открытия.');
+  if (D.DISCOUNT.percent < 0 || D.DISCOUNT.percent > 100) e.push('Скидка: процент должен быть от 0 до 100.');
+  var ids = {}; D.MASTERS.forEach(function (m) { ids[m.id] = 1; });
+  D.SERVICES.forEach(function (s, i) {
+    var n = 'Услуга ' + (i + 1) + ' («' + (s.title || 'без названия') + '»): ';
+    if (!s.title) e.push(n + 'нет названия.');
+    if (!(s.price >= 0)) e.push(n + 'цена должна быть числом ≥ 0.');
+    if (!(s.minutes >= 5 && s.minutes <= 600)) e.push(n + 'длительность от 5 до 600 минут.');
+    if (!s.photo) e.push(n + 'нет фото.');
+    (s.masters || []).forEach(function (mid) { if (!ids[mid]) e.push(n + 'неизвестный мастер ' + mid + '.'); });
+  });
+  D.MASTERS.forEach(function (m, i) { if (!m.name) e.push('Мастер ' + (i + 1) + ': нет имени.'); if (!m.id) e.push('Мастер ' + (i + 1) + ': нет id.'); });
+  D.GALLERY.forEach(function (g, i) { if (!g.src) e.push('Галерея, фото ' + (i + 1) + ': нет пути.'); });
+  return e;
+}
+function js(v) { return JSON.stringify(v, null, 2); }
+function generate() {
+  var L = [];
+  L.push('/* =====================================================================');
+  L.push('   ÉCLAT STUDIO — СОДЕРЖИМОЕ САЙТА');
+  L.push('   ---------------------------------------------------------------------');
+  L.push('   Файл собран в редакторе redaktor.html — правьте содержимое там, полями.');
+  L.push('   Вручную этот файл лучше не редактировать: случайно удалённая кавычка');
+  L.push('   или запятая — и сайт перестанет читать данные.');
+  L.push('   ===================================================================== */');
+  L.push('');
+  L.push('/* ---------- НАСТРОЙКИ САЙТА (контакты, график, карта) ---------- */');
+  L.push('var SITE = ' + js(D.SITE) + ';');
+  L.push('');
+  L.push('/* ---------- РЕЖИМЫ РАБОТЫ САЙТА ---------- */');
+  L.push('var SETTINGS = ' + js(D.SETTINGS) + ';');
+  L.push('');
+  L.push('/* ---------- ПЕНСИОННАЯ СКИДКА ---------- */');
+  L.push('var DISCOUNT = ' + js(D.DISCOUNT) + ';');
+  L.push('');
+  L.push('/* ---------- МАСТЕРА ---------- */');
+  L.push('var MASTERS = ' + js(D.MASTERS) + ';');
+  L.push('');
+  L.push('/* ---------- УСЛУГИ ---------- */');
+  L.push('var SERVICES = ' + js(D.SERVICES) + ';');
+  L.push('');
+  L.push('/* ---------- ГАЛЕРЕЯ ---------- */');
+  L.push('var GALLERY = ' + js(D.GALLERY) + ';');
+  L.push('');
+  L.push('/* ---------- ТЕКСТЫ ---------- */');
+  L.push('var TEXTS = ' + js(D.TEXTS) + ';');
+  L.push('');
+  L.push('/* ---------- ОТЗЫВЫ ---------- */');
+  L.push('var REVIEWS = ' + js(D.REVIEWS) + ';');
+  L.push('');
+  return L.join('\n');
+}
+function download(name, text) {
+  var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function doSave() {
+  var errs = validate(), box = $('#save-errors');
+  if (errs.length) {
+    box.innerHTML = '<div class="errs"><b>Проверьте перед сохранением:</b><ul><li>' + errs.map(esc).join('</li><li>') + '</li></ul></div>';
+    toast('⚠ Есть замечания — посмотрите под кнопками', 'err', 5000); return;
+  }
+  box.innerHTML = '';
+  var code = generate();
+  try { parseSrc(code); } catch (e) {
+    box.innerHTML = '<div class="errs">Внутренняя ошибка сборки: ' + esc(e.message) + ' — файл не скачан.</div>'; return;
+  }
+  download('site-data.js', code);
+  dirty = false; updateStatus(); saveLocal();
+  toast('✔ site-data.js скачан. Замените им старый файл в папке сайта', 'good', 5200);
+}
+function doCopy() {
+  var code = generate();
+  function fb() {
+    var ta = document.createElement('textarea'); ta.value = code; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
+    var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+    ta.remove(); toast(ok ? '✔ Скопировано — можно вставлять (Ctrl+V)' : '⚠ Не скопировалось — используйте «Скачать файл»', ok ? 'good' : 'err', 5000);
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(function () { toast('✔ Скопировано — можно вставлять (Ctrl+V)', 'good', 5000); }, fb);
+  else fb();
+}
+$('#btn-save').addEventListener('click', doSave);
+$('#btn-copy').addEventListener('click', doCopy);
+$('#btn-backup').addEventListener('click', function () {
+  if (!originalSrc) { toast('Сначала откройте site-data.js', 'err'); return; }
+  download('site-data-ZAPAS.js', originalSrc); toast('✔ Запасная копия скачана', 'good');
+});
+
+/* ---------- черновик и статус ---------- */
+function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify({ D: D, ts: Date.now() })); } catch (e) {} }
+function loadLocal() { try { var r = localStorage.getItem(KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
+function updateStatus() { $('#status').textContent = dirty ? '● есть несохранённые правки' : '✔ правок нет'; }
+window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+var tT;
+function toast(msg, kind, ms) {
+  var t = $('#toast'); t.textContent = msg; t.className = 'toast on' + (kind ? ' ' + kind : '');
+  clearTimeout(tT); tT = setTimeout(function () { t.className = 'toast'; }, ms || 3200);
+}
+var saved = loadLocal();
+if (saved && saved.D) {
+  var ago = Math.round((Date.now() - saved.ts) / 60000);
+  if (confirm('Нашёлся черновик правок (' + (ago < 60 ? ago + ' мин назад' : 'давно') + '). Продолжить с ним?\n«ОК» — продолжить, «Отмена» — начать заново.')) {
+    D = saved.D; dirty = true;
+    $('#start').classList.add('hidden'); $('#work').classList.remove('hidden');
+    renderTabs(); fillTab(); updateStatus();
+    toast('Продолжаем черновик — не забудьте скачать файл', '', 4200);
+  } else { try { localStorage.removeItem(KEY); } catch (e) {} }
+}
+</script>
+</body>
+</html>

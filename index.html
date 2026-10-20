@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ÉCLAT STUDIO — парикмахерский салон премиум-класса | Онлайн-запись</title>
+<meta name="description" content="ÉCLAT STUDIO — премиальный парикмахерский салон: женский, мужской и детский залы. Стрижки, окрашивание, уход. Онлайн-запись за минуту, оплата в салоне.">
+<meta property="og:title" content="ÉCLAT STUDIO — сияние начинается здесь">
+<meta property="og:description" content="Премиальный парикмахерский салон с онлайн-записью. Три зала: женский, мужской, детский.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="img/hero-interior.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E✂️%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700;800&family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css?v=9">
+</head>
+<body>
+
+<header class="top" id="top-header">
+  <div class="wrap nav">
+    <a class="logo" href="#top">ÉCLAT <b>STUDIO</b></a>
+    <ul>
+      <li><a href="#services">Услуги</a></li>
+      <li><a href="#masters">Мастера</a></li>
+      <li><a href="#about">О салоне</a></li>
+      <li><a href="#gallery">Галерея</a></li>
+      <li><a href="#contacts">Контакты</a></li>
+    </ul>
+    <a class="btn btn--sm" href="#book" data-book>Записаться онлайн</a>
+    <button class="burger" id="burger" aria-label="Открыть меню"><span></span><span></span><span></span></button>
+  </div>
+</header>
+
+<div class="mmenu" id="mmenu" role="dialog" aria-label="Меню">
+  <button class="close" id="mmenu-close" aria-label="Закрыть меню">×</button>
+  <a href="#services">Услуги</a>
+  <a href="#masters">Мастера</a>
+  <a href="#about">О салоне</a>
+  <a href="#gallery">Галерея</a>
+  <a href="#contacts">Контакты</a>
+  <a class="btn" href="#book" data-book>Записаться онлайн</a>
+</div>
+
+<main id="top">
+  <!-- ПЕРВЫЙ ЭКРАН -->
+  <section class="hero">
+    <div class="hero__bg" id="hero-bg"><img src="img/hero-interior.jpg" alt="Интерьер салона ÉCLAT STUDIO" fetchpriority="high"></div>
+    <div class="hero-wrap">
+      <div class="hero__in">
+        <span class="hero__tag">ПРЕМИАЛЬНЫЙ ПАРИКМАХЕРСКИЙ САЛОН</span>
+        <h1 id="hero-name">ÉCLAT STUDIO</h1>
+        <h2 class="neon" id="hero-slogan" style="font-size:clamp(20px,3vw,32px)">Сияние начинается здесь</h2>
+        <p class="lead" id="hero-lead"></p>
+        <div class="hero__cta">
+          <a class="btn" href="#book" data-book>Записаться онлайн</a>
+          <a class="btn btn--ghost" href="#services">Наши услуги</a>
+        </div>
+        <div class="hero__facts" id="hero-facts"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- БЕГУЩАЯ СТРОКА -->
+  <div class="marquee" aria-hidden="true"><div class="marquee__track" id="marquee"></div></div>
+
+  <!-- ТРИ НАПРАВЛЕНИЯ -->
+  <section class="section section--light" id="dirs">
+    <div class="wrap">
+      <h2 style="color:var(--ink)">Три направления — <span class="neon">одна студия</span></h2>
+      <p class="muted" style="max-width:620px">Выберите зал: сервис, мастера и запись подобраны под каждое направление.</p>
+      <div class="dirs" id="dirs-grid" style="margin-top:26px"></div>
+    </div>
+  </section>
+
+  <!-- УСЛУГИ -->
+  <section class="section" id="services">
+    <div class="wrap">
+      <h2>Услуги и цены</h2>
+      <p class="muted" style="max-width:640px">Продолжительность каждой услуги учитывается системой записи: мы не поставим запись впритык к закрытию салона.</p>
+      <div class="filters" id="svc-filters" style="margin-top:22px"></div>
+      <div class="svc" id="svc-grid"></div>
+      <p class="small muted" style="margin-top:20px">Цены демонстрационные и уточняются салоном до запуска сайта.</p>
+    </div>
+  </section>
+
+  <!-- ПЕНСИОННАЯ СКИДКА -->
+  <section class="section" id="pension" style="padding-top:0">
+    <div class="wrap"><div class="pension rv" id="pension-box"></div></div>
+  </section>
+
+  <!-- МАСТЕРА -->
+  <section class="section section--light" id="masters">
+    <div class="wrap">
+      <h2 style="color:var(--ink)">Мастера</h2>
+      <p class="muted" style="max-width:640px">Команда студии. Профили помечены как демонстрационные до запуска реальных данных.</p>
+      <div class="masters" id="masters-grid" style="margin-top:26px"></div>
+    </div>
+  </section>
+
+  <!-- О САЛОНЕ -->
+  <section class="section" id="about">
+    <div class="wrap" style="display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center" id="about-grid">
+      <div class="rv">
+        <h2 id="about-title">О салоне</h2>
+        <p id="about-text" style="color:#CFCCDB;font-size:18px"></p>
+        <div class="hero__facts" id="about-facts"></div>
+      </div>
+      <figure class="rv" style="margin:0;border-radius:24px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--glow-v)">
+        <img src="img/about-hall.jpg" alt="Зал ÉCLAT STUDIO" loading="lazy">
+      </figure>
+    </div>
+  </section>
+
+  <!-- ГАЛЕРЕЯ -->
+  <section class="section" id="gallery" style="padding-top:0">
+    <div class="wrap">
+      <h2>Галерея</h2>
+      <p class="muted" style="max-width:640px">Интерьер, рабочие места и результаты работы мастеров. Нажмите на фото, чтобы увеличить.</p>
+      <div class="gal" id="gal" style="margin-top:26px"></div>
+    </div>
+  </section>
+
+  <!-- ОТЗЫВЫ -->
+  <section class="section section--light" id="reviews">
+    <div class="wrap">
+      <h2 style="color:var(--ink)">Отзывы</h2>
+      <div id="reviews-box" style="margin-top:18px"></div>
+    </div>
+  </section>
+
+  <!-- КОНТАКТЫ -->
+  <section class="section" id="contacts">
+    <div class="wrap">
+      <h2>Контакты</h2>
+      <div class="contacts" style="margin-top:24px">
+        <div class="c-card rv" id="c-card"></div>
+        <div class="map rv" id="map-box"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© <span id="year"></span> ÉCLAT STUDIO. Сияние начинается здесь.</span>
+    <span>Оплата производится в салоне · Сайт сделан <a href="https://venera0207.github.io/venera-portfolio/" target="_blank" rel="noopener" style="color:var(--muted-d)">Венерой Тенюшевой</a></span>
+  </div>
+</footer>
+
+<!-- МАСТЕР ЗАПИСИ -->
+<div class="wiz" id="wiz" role="dialog" aria-modal="true" aria-label="Онлайн-запись">
+  <div class="wiz__box">
+    <div class="wiz__head">
+      <h3 id="wiz-title">Онлайн-запись</h3>
+      <button class="wiz__close" id="wiz-close" aria-label="Закрыть">×</button>
+    </div>
+    <div class="wiz__steps" id="wiz-steps"></div>
+    <div id="wiz-body"></div>
+    <div class="wiz__nav">
+      <button class="btn btn--ghost btn--sm" id="wiz-back">Назад</button>
+      <button class="btn btn--sm" id="wiz-next">Далее</button>
+    </div>
+  </div>
+</div>
+
+<!-- ЛАЙТБОКС -->
+<div class="lightbox" id="lightbox" role="dialog" aria-label="Просмотр фото">
+  <button class="close" id="lb-close" aria-label="Закрыть">×</button>
+  <img id="lb-img" src="" alt="">
+  <div class="cap" id="lb-cap"></div>
+</div>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="site-data.js?v=9"></script>
+<script src="js/engine.js?v=9"></script>
+<script src="js/app.js?v=10"></script>
+<script src="js/assistant-eclat.js?v=10"></script>
+</body>
+</html>
