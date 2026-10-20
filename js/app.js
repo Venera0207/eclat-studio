@@ -374,46 +374,11 @@
   /* ---------- подтверждение: труба или локальный демо-режим ---------- */
   function submit() {
     var p = payload();
+    W._p = p;
     var btn = $('#wiz-next'); btn.disabled = true; btn.textContent = 'Сохраняем…';
-    var finish = function (id, mailOk, mailMsg, note) {
-      var s = curService(), m = masterById(W.masterId), pr = E.calcPrice(s, { pension: W.pension }, DISCOUNT);
-      W.step = 8; drawSteps();
-      var noteLine = note ? '<br><span class="small" style="color:var(--blue)">' + esc(note) + '</span>' : '';
-      var mailLine = SETTINGS.pipeUrl
-        ? '<br><span class="small">Салон получил заявку: она в базе записей и письме у администратора.</span>'
-        : (mailOk
-          ? '<br><span class="small">Заявка отправлена на почту салона: ' + esc(SITE.email) + '.</span>'
-          : '<br><span class="small">Письмо не ушло' + (mailMsg ? ' (ответ сервиса: ' + esc(mailMsg) + ')' : '') +
-            '. Запись сохранена — позвоните нам: ' + esc(SITE.phone) + '.</span>');
-      $('#wiz-body').innerHTML = '<div class="done"><div class="ok"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></div>' +
-        '<h4 style="font-size:24px">Вы записаны!</h4>' +
-        '<div class="num">Номер записи: ' + esc(id) + '</div>' +
-        '<p class="small muted" style="margin:-6px 0 10px">Номер короткий — его легко запомнить и назвать в салоне.</p>' +
-        '<p class="muted">' + esc(s.title) + ' · ' + esc(m.name) + ' · ' + dateRu(W.date) + ' · ' + E.m2hm(W.startMin) + '–' + W.endHM + '<br>' +
-        'Итого: <b style="color:var(--milk)">' + money(pr.final) + '</b>. ' + esc(TEXTS.payNote) + '.' + noteLine + mailLine +
-        '</p>' + (!SETTINGS.pipeUrl && !mailOk
-          ? '<button class="btn btn--ghost btn--sm" style="margin-right:10px" id="wiz-copy">Скопировать текст заявки</button>'
-          : '') +
-        '<button class="btn" id="wiz-done">Отлично</button></div>';
-      var cp = $('#wiz-copy');
-      if (cp) cp.addEventListener('click', function () {
-        copyText(buildMailBody(p, id, pr), function (ok) {
-          cp.textContent = ok ? 'Скопировано — пришлите нам в любой мессенджер' : 'Не удалось скопировать — позвоните нам';
-          cp.disabled = ok;
-        });
-      });
-      $('#wiz-done').addEventListener('click', closeWiz);
-      btn.disabled = false;
-      if (TG && TG.HapticFeedback) TG.HapticFeedback.notificationOccurred('success');
-    };
-    var conflict = function (msg) {
-      btn.disabled = false; btn.textContent = 'Подтвердить запись';
-      toastWiz(msg || 'Не удалось сохранить запись. Попробуйте ещё раз.');
-      if (msg && /занят/i.test(msg)) { W.step = 5; W.startMin = null; loadRemote(function () { drawWiz(); }); }
-    };
     if (SETTINGS.pipeUrl) {
       jsonp(SETTINGS.pipeUrl, { action: 'book', data: JSON.stringify(p) }, function (d) {
-        if (d && d.ok) finish(d.id);
+        if (d && d.ok) finish(d.id, 'pipe', '', '');
         else conflict(d && d.reason === 'conflict' ? 'Это время только что заняли. Выберите другой интервал.' : d && d.error);
       }, function () {
         /* труба недоступна: запасной путь — локально + резервное письмо */
@@ -425,14 +390,64 @@
   }
   function localSave(p, note) {
     var v = E.validateBooking(p, DATA_ALL(), state.bookings, state.blocks, new Date());
-    if (!v.ok) { $('#wiz-next').disabled = false; $('#wiz-next').textContent = 'Подтвердить запись'; return toastWiz(v.errors[0]); }
+    if (!v.ok) { conflict(v.errors[0]); return; }
     var id = genId();
     state.bookings.push({ id: id, masterId: p.masterId, date: p.date, startMin: p.startMin, endMin: p.startMin + p.minutes,
       status: 'confirmed', name: p.name, phone: p.phone, comment: p.comment,
       priceBase: v.price.base, priceFinal: v.price.final, discountPercent: v.price.percent,
       source: 'site', created: new Date().toISOString() });
     lsSet(LS_B, state.bookings);
-    mailOwner(p, id, v.price, function (ok, msg) { finish(id, ok, msg, note); });
+    /* экран успеха показываем СРАЗУ; письмо долетает фоном и обновляет строчку */
+    finish(id, 'pending', '', note);
+    mailOwner(p, id, v.price, function (ok, msg) { setMailLine(ok, msg); });
+  }
+  function conflict(msg) {
+    var btn = $('#wiz-next'); btn.disabled = false; btn.textContent = 'Подтвердить запись';
+    toastWiz(msg || 'Не удалось сохранить запись. Попробуйте ещё раз.');
+    if (msg && /занят/i.test(msg)) { W.step = 5; W.startMin = null; loadRemote(function () { drawWiz(); }); }
+  }
+  function finish(id, mailState, mailMsg, note) {
+    var s = curService(), m = masterById(W.masterId), pr = E.calcPrice(s, { pension: W.pension }, DISCOUNT);
+    W._id = id; W._pr = pr;
+    W.step = 8; drawSteps();
+    var noteLine = note ? '<br><span class="small" style="color:var(--blue)">' + esc(note) + '</span>' : '';
+    var mailLine;
+    if (mailState === 'pipe') mailLine = '<br><span class="small">Салон получил заявку: она в базе записей и письме у администратора.</span>';
+    else if (mailState === 'ok') mailLine = '<br><span class="small">Заявка отправлена на почту салона: ' + esc(SITE.email) + '.</span>';
+    else if (mailState === 'fail') mailLine = failMailLine(mailMsg) + copyBtnHtml();
+    else mailLine = '<br><span class="small" id="wiz-mail-line">Запись сохранена. Отправляем письмо салону…</span>';
+    $('#wiz-body').innerHTML = '<div class="done"><div class="ok"><svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg></div>' +
+      '<h4 style="font-size:24px">Вы записаны!</h4>' +
+      '<div class="num">Номер записи: ' + esc(id) + '</div>' +
+      '<p class="small muted" style="margin:-6px 0 10px">Номер короткий — его легко запомнить и назвать в салоне.</p>' +
+      '<p class="muted">' + esc(s.title) + ' · ' + esc(m.name) + ' · ' + dateRu(W.date) + ' · ' + E.m2hm(W.startMin) + '–' + W.endHM + '<br>' +
+      'Итого: <b style="color:var(--milk)">' + money(pr.final) + '</b>. ' + esc(TEXTS.payNote) + '.' + noteLine + mailLine +
+      '</p><button class="btn" id="wiz-done">Отлично</button></div>';
+    bindCopy();
+    $('#wiz-done').addEventListener('click', closeWiz);
+    $('#wiz-next').disabled = false;
+    if (TG && TG.HapticFeedback) TG.HapticFeedback.notificationOccurred('success');
+  }
+  function failMailLine(msg) {
+    return '<br><span class="small">Письмо не ушло' + (msg ? ' (' + esc(msg) + ')' : '') +
+      '. Запись сохранена — позвоните нам: ' + esc(SITE.phone) + '.</span>';
+  }
+  function copyBtnHtml() { return '<br><button class="btn btn--ghost btn--sm" style="margin-top:10px" id="wiz-copy">Скопировать текст заявки</button>'; }
+  function bindCopy() {
+    var cp = $('#wiz-copy');
+    if (!cp) return;
+    cp.addEventListener('click', function () {
+      copyText(buildMailBody(W._p || payload(), W._id, W._pr), function (ok) {
+        cp.textContent = ok ? 'Скопировано — пришлите нам в любой мессенджер' : 'Не удалось скопировать — позвоните нам';
+        cp.disabled = ok;
+      });
+    });
+  }
+  function setMailLine(ok, msg) {
+    var el = document.getElementById('wiz-mail-line');
+    if (!el) return;
+    if (ok) el.outerHTML = '<span class="small">Заявка отправлена на почту салона: ' + esc(SITE.email) + '.</span>';
+    else { el.outerHTML = failMailLine(msg) + copyBtnHtml(); bindCopy(); }
   }
   /* короткий номер записи: ECL-001, ECL-002… — легко запомнить и продиктовать */
   function genId() {
@@ -453,16 +468,26 @@
       'Стоимость': price.final + ' руб.' + (price.applied ? ' (скидка ' + price.percent + '%)' : ''),
       'Комментарий': p.comment || '—'
     };
+    var done = false, ctl = ('AbortController' in window) ? new AbortController() : null;
+    var timer = setTimeout(function () {
+      if (ctl) ctl.abort();
+      if (!done) { done = true; cb && cb(false, 'почтовый сервис не ответил за 15 секунд'); }
+    }, 15000);
     fetch('https://formsubmit.co/ajax/' + encodeURIComponent(SITE.email), {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(function (r) { return r.json(); })
+      body: JSON.stringify(body), signal: ctl ? ctl.signal : undefined
+    }).then(function (r) { clearTimeout(timer); return r.json(); })
       .then(function (j) {
+        if (done) return; done = true;
         var ok = !!(j && (j.success === 'true' || j.success === true));
         if (!ok) console.warn('FormSubmit ответил:', j);
         cb && cb(ok, (j && j.message) || (ok ? '' : 'ответ без статуса'));
       })
-      .catch(function (e) { console.warn('FormSubmit недоступен:', e); cb && cb(false, 'сервис недоступен из сети'); });
+      .catch(function (e) {
+        clearTimeout(timer);
+        if (done) return; done = true;
+        console.warn('FormSubmit недоступен:', e); cb && cb(false, 'сервис недоступен из сети');
+      });
   }
   function buildMailBody(p, id, pr) {
     var s = curService(), m = masterById(W.masterId);
