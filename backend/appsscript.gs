@@ -36,13 +36,17 @@ var B_HEAD = ['Номер', 'Дата', 'Начало', 'Конец', 'Маст�
 var K_HEAD = ['Номер', 'Мастер', 'Дата', 'Начало', 'Конец', 'Причина'];
 var L_HEAD = ['Когда', 'Событие', 'Кому', 'Тема', 'Статус', 'Ошибка'];
 
-function sheet(name, header) {
+function sheet(name, header, textAll) {
   var sh = ss().getSheetByName(name);
-  if (!sh) { sh = ss().insertSheet(name); sh.appendRow(header); sh.setFrozenRows(1); }
+  if (!sh) {
+    sh = ss().insertSheet(name);
+    if (textAll) sh.getRange('A:Z').setNumberFormat('@'); /* текст: телефоны с «+» и времена не превращаются в формулы */
+    sh.appendRow(header); sh.setFrozenRows(1);
+  }
   return sh;
 }
-function bookingsSheet() { return sheet('Записи', B_HEAD); }
-function blocksSheet() { return sheet('Блоки', K_HEAD); }
+function bookingsSheet() { return sheet('Записи', B_HEAD, true); }
+function blocksSheet() { return sheet('Блоки', K_HEAD, true); }
 function logsSheet() { return sheet('Журнал', L_HEAD); }
 
 function rowsToObjects(sh) {
@@ -75,6 +79,9 @@ function dropCatalogCache() { CacheService.getScriptCache().remove('eclat_catalo
 /* ---------- помощники времени и имён ---------- */
 function hm2m(s) { var p = String(s).split(':'); return (+p[0]) * 60 + (+p[1]); }
 function m2hm(m) { m = Math.max(0, Math.round(m)); return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
+/* защита от «умных» ячеек: если Гугл всё же превратил значение в дату/время, читаем корректно */
+function asDateStr(v) { if (v instanceof Date) return Utilities.formatDate(v, 'Europe/Moscow', 'yyyy-MM-dd'); return String(v); }
+function asHM(v) { if (v instanceof Date) return v.getHours() * 60 + v.getMinutes(); return hm2m(String(v)); }
 function masterIdByName(name, D) {
   if (!name) return null;
   var found = D.MASTERS.filter(function (m) { return m.name === name || m.id === name; })[0];
@@ -104,11 +111,11 @@ function rangeFree(m, dateS, s, e, bookings, blocks, D) {
   var busy = [];
   bookings.forEach(function (b) {
     if (b['Статус'] === 'отменена') return;
-    if (masterIdByName(b['Мастер'], D) === m.id && b['Дата'] === dateS) busy.push({ s: hm2m(b['Начало']), e: hm2m(b['Конец']), k: 'b' });
+    if (masterIdByName(b['Мастер'], D) === m.id && asDateStr(b['Дата']) === dateS) busy.push({ s: asHM(b['Начало']), e: asHM(b['Конец']), k: 'b' });
   });
   blocks.forEach(function (b) {
     var bid = b['Мастер'] === 'все' ? 'all' : masterIdByName(b['Мастер'], D);
-    if ((bid === m.id || bid === 'all') && b['Дата'] === dateS) busy.push({ s: hm2m(b['Начало']), e: hm2m(b['Конец']), k: 'k' });
+    if ((bid === m.id || bid === 'all') && asDateStr(b['Дата']) === dateS) busy.push({ s: asHM(b['Начало']), e: asHM(b['Конец']), k: 'k' });
   });
   for (var i = 0; i < busy.length; i++) {
     var bs = busy[i].k === 'b' ? busy[i].s - buf : busy[i].s;
@@ -152,10 +159,10 @@ function route(p) {
     var bs = rowsToObjects(bookingsSheet()).filter(function (b) {
       return b['Статус'] !== 'отменена' && b['Дата'] >= (p.from || '0000-00-00') && b['Дата'] <= (p.to || '9999-99-99');
     }).map(function (b) { /* обезличенно: без имён и телефонов клиентов */
-      return { id: b['Номер'], masterId: masterIdByName(b['Мастер'], D), date: b['Дата'], startMin: hm2m(b['Начало']), endMin: hm2m(b['Конец']), status: 'confirmed' };
+      return { id: b['Номер'], masterId: masterIdByName(b['Мастер'], D), date: asDateStr(b['Дата']), startMin: asHM(b['Начало']), endMin: asHM(b['Конец']), status: 'confirmed' };
     });
     var ks = rowsToObjects(blocksSheet()).map(function (k) {
-      return { id: k['Номер'], masterId: k['Мастер'] === 'все' ? 'all' : masterIdByName(k['Мастер'], D), date: k['Дата'], startMin: hm2m(k['Начало']), endMin: hm2m(k['Конец']), reason: k['Причина'] };
+      return { id: k['Номер'], masterId: k['Мастер'] === 'все' ? 'all' : masterIdByName(k['Мастер'], D), date: asDateStr(k['Дата']), startMin: asHM(k['Начало']), endMin: asHM(k['Конец']), reason: k['Причина'] };
     });
     return { ok: true, bookings: bs, blocks: ks };
   }
@@ -215,7 +222,9 @@ function book(p) {
     bookings.forEach(function (b) { var mm = /ECL-(\d+)$/.exec(String(b['Номер'])); if (mm) maxN = Math.max(maxN, +mm[1]); });
     var nn = String(maxN + 1); while (nn.length < 3) nn = '0' + nn;
     var id = 'ECL-' + nn;
-    bookingsSheet().appendRow([id, p.date, m2hm(start), m2hm(end), master.name, service.title,
+    var shB = bookingsSheet();
+    shB.getRange('A:O').setNumberFormat('@'); /* на всякий случай: уже существующий лист тоже делаем текстовым */
+    shB.appendRow([id, p.date, m2hm(start), m2hm(end), master.name, service.title,
       p.name, p.phone, p.comment || '', 'подтверждена', price.final, price.percent, 'сайт',
       Utilities.formatDate(nowS, tz, 'dd.MM.yyyy HH:mm'), '']);
     notifyOwner(p, master, service, price, id, D);
@@ -266,8 +275,8 @@ function sendReminders() {
   var sh = bookingsSheet(), v = sh.getDataRange().getValues();
   var lines = [];
   for (var i = 1; i < v.length; i++) {
-    if (v[i][1] === tomorrow && v[i][9] === 'подтверждена' && !v[i][14]) {
-      lines.push('• ' + v[i][2] + '–' + v[i][3] + ' — ' + v[i][6] + ', ' + v[i][7] + ' (' + v[i][5] + ', мастер ' + v[i][4] + ')');
+    if (asDateStr(v[i][1]) === tomorrow && v[i][9] === 'подтверждена' && !v[i][14]) {
+      lines.push('• ' + m2hm(asHM(v[i][2])) + '–' + m2hm(asHM(v[i][3])) + ' — ' + v[i][6] + ', ' + v[i][7] + ' (' + v[i][5] + ', мастер ' + v[i][4] + ')');
       sh.getRange(i + 1, 15).setValue(1);
     }
   }
