@@ -240,7 +240,7 @@ body {
 
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
-    <h1>🔐 Админка ÉCLAT STUDIO</h1>
+    <h1> Админка ÉCLAT STUDIO</h1>
     <input type="password" id="tokenInput" placeholder="Введите ADMIN_TOKEN">
     <button onclick="login()">Войти</button>
   </div>
@@ -299,7 +299,7 @@ body {
 </div>
 
 <script>
-var PIPE_URL = '';
+var PIPE_URL = 'https://script.google.com/macros/s/AKfycby5QU83WgqvnfSlclUlPVyXu9WLTAiYWflEfTrOjw3z1l-dWXKvCu-RzSDSm5oH9peO-w/exec';
 var TOKEN = localStorage.getItem('adminToken') || '';
 
 window.onload = function() {
@@ -308,19 +308,7 @@ window.onload = function() {
     login();
   }
   document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
-  loadSiteData();
 };
-
-function loadSiteData() {
-  var script = document.createElement('script');
-  script.src = 'https://venera0207.github.io/eclat-studio/site-data.js';
-  script.onload = function() {
-    if (typeof SITE_DATA !== 'undefined' && SITE_DATA.pipeUrl) {
-      PIPE_URL = SITE_DATA.pipeUrl;
-    }
-  };
-  document.head.appendChild(script);
-}
 
 function login() {
   TOKEN = document.getElementById('tokenInput').value.trim();
@@ -340,7 +328,6 @@ function logout() {
 }
 
 function loadStats() {
-  if (!PIPE_URL) { setTimeout(loadStats, 500); return; }
   var url = PIPE_URL + '?action=getStats&token=' + TOKEN + '&cb=cb';
   var script = document.createElement('script');
   window.cb = function(data) {
@@ -362,7 +349,6 @@ function loadDay() {
     alert('Выберите дату');
     return;
   }
-  if (!PIPE_URL) { alert('Труба ещё загружается, подождите секунду'); return; }
   var url = PIPE_URL + '?action=getDay&date=' + date + '&token=' + TOKEN + '&cb=cb';
   var script = document.createElement('script');
   window.cb = function(data) {
