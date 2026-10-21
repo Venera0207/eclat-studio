@@ -30,7 +30,7 @@ var SETTINGS = {
   slotStep: 15,        // шаг сетки времени, минут
   bufferMin: 10,       // перерыв между записями, минут
   maxDaysAhead: 60,    // на сколько дней вперёд можно записаться
-  pipeUrl: 'https://script.google.com/macros/s/AKfycbw2d5z6woLlIpSjJtLXxTZoQFc8WqZ3qGmF8ZYqT5H4ney15SITxcSH2hL_9OelW9WU/exec', // адрес сервера записи (Google Apps Script)
+  pipeUrl: 'https://script.google.com/macros/s/AKfycby5QU83WgqvnfSlclUlPVyXu9WLTAiYWflEfTrOjw3z1l-dWXKvCu-RzSDSm5oH9peO-w/exec', // адрес сервера записи (Google Apps Script)
   assistantUrl: '',    // адрес трубы ИИ-ассистента (Google Apps Script). Пусто = ассистент отвечает по локальной базе
   pipeNote: 'Пока сервер не подключён, записи хранятся локально в браузере (демо-режим). Подключение: backend/README.md'
 };
