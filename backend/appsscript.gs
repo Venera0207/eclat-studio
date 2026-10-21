@@ -1,39 +1,49 @@
 /* =====================================================================
    ÉCLAT STUDIO — СЕРВЕР ЗАПИСИ (Google Apps Script + Google Sheets)
    ---------------------------------------------------------------------
-   Что делает:
-   • хранит записи и блоки в таблице (база данных);
-   • серверно проверяет доступность интервала и НЕ ДОВЕРЯЕТ цене из браузера;
-   • защищает от двойного бронирования: LockService + повторная проверка
-     пересечений внутри блокировки (одновременные запросы не создадут конфликт);
+   • хранит записи и блоки в таблице (база данных) с русскими заголовками;
+   • серверно проверяет доступность и НЕ ДОВЕРЯЕТ цене из браузера;
+   • защита от двойного бронирования: LockService + повторная проверка
+     пересечений внутри блокировки;
    • шлёт владельцу письмо о каждой новой записи и журнал отправок;
-   • напоминания о записях на завтра (почасовой триггер).
-   КАТАЛОГ услуг/мастеров/скидок сервер читает из опубликованного файла
-   site-data.js вашего сайта (кеш 5 минут) — источник данных один.
-   ---------------------------------------------------------------------
+   • напоминания о записях на завтра (почасовой триггер, по желанию);
+   • каталог услуг/мастеров читает из опубликованного site-data.js (кеш 5 мин).
    УСТАНОВКА: см. backend/README.md
    ===================================================================== */
 
 var OWNER_EMAIL = 'venera.web.4@gmail.com';   // куда падают заявки
-var ADMIN_TOKEN = 'СЮДА_СЛУЧАЙНУЮ_СТРОКУ_32_ЗНАКА'; // секрет для админ-операций (отмена, блоки, список)
-var SITE_DATA_URL = 'https://venera0207.github.io/<ПАПКA_САЙТА>/site-data.js'; // адрес опубликованного site-data.js
+var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';       // ваш пароль админки (из Заметок)
+var SITE_DATA_URL = 'https://venera0207.github.io/eclat-studio/site-data.js';
 var SALON_TITLE = 'ÉCLAT STUDIO';
 
 /* ================= СЛУЖЕБНОЕ ================= */
 
-function ss() { return SpreadsheetApp.getActiveSpreadsheet(); }
+/* База: если проект прикреплён к таблице — пишем в неё;
+   иначе создаём свою при первом обращении и запоминаем в свойствах */
+function ss() {
+  var bound = SpreadsheetApp.getActiveSpreadsheet();
+  if (bound) return bound;
+  var p = PropertiesService.getScriptProperties();
+  var id = p.getProperty('DB_ID');
+  if (id) { try { return SpreadsheetApp.openById(id); } catch (e) {} }
+  var ns = SpreadsheetApp.create('ÉCLAT STUDIO — база записей');
+  p.setProperty('DB_ID', ns.getId());
+  return ns;
+}
+
+/* Заголовки листов — только нужные колонки, по-русски */
+var B_HEAD = ['Номер', 'Дата', 'Начало', 'Конец', 'Мастер', 'Услуга', 'Имя', 'Телефон', 'Комментарий', 'Статус', 'Цена', 'Скидка %', 'Источник', 'Создана', 'Напомнено'];
+var K_HEAD = ['Номер', 'Мастер', 'Дата', 'Начало', 'Конец', 'Причина'];
+var L_HEAD = ['Когда', 'Событие', 'Кому', 'Тема', 'Статус', 'Ошибка'];
+
 function sheet(name, header) {
   var sh = ss().getSheetByName(name);
   if (!sh) { sh = ss().insertSheet(name); sh.appendRow(header); sh.setFrozenRows(1); }
   return sh;
 }
-var B_HEAD = ['id', 'masterId', 'date', 'startMin', 'endMin', 'name', 'phone', 'comment', 'status', 'priceBase', 'priceFinal', 'discountPercent', 'source', 'created', 'updated', 'reminded'];
-var K_HEAD = ['id', 'masterId', 'date', 'startMin', 'endMin', 'reason'];
-var L_HEAD = ['ts', 'type', 'to', 'subject', 'status', 'error'];
-
-function bookingsSheet() { return sheet('bookings', B_HEAD); }
-function blocksSheet() { return sheet('blocks', K_HEAD); }
-function logsSheet() { return sheet('logs', L_HEAD); }
+function bookingsSheet() { return sheet('Записи', B_HEAD); }
+function blocksSheet() { return sheet('Блоки', K_HEAD); }
+function logsSheet() { return sheet('Журнал', L_HEAD); }
 
 function rowsToObjects(sh) {
   var v = sh.getDataRange().getValues();
@@ -42,7 +52,7 @@ function rowsToObjects(sh) {
     var o = {};
     head.forEach(function (h, i) { o[h] = r[i]; });
     return o;
-  }).filter(function (o) { return o.id; });
+  }).filter(function (o) { return o['Номер'] || o['Когда']; });
 }
 
 function log(type, to, subject, status, err) {
@@ -62,9 +72,17 @@ function catalog() {
 }
 function dropCatalogCache() { CacheService.getScriptCache().remove('eclat_catalog'); }
 
-/* ---------- движок доступности на сервере (тот же, что в js/engine.js) ---------- */
+/* ---------- помощники времени и имён ---------- */
 function hm2m(s) { var p = String(s).split(':'); return (+p[0]) * 60 + (+p[1]); }
+function m2hm(m) { m = Math.max(0, Math.round(m)); return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
+function masterIdByName(name, D) {
+  if (!name) return null;
+  var found = D.MASTERS.filter(function (m) { return m.name === name || m.id === name; })[0];
+  return found ? found.id : String(name);
+}
 function overlap(a1, a2, b1, b2) { return a1 < b2 && b1 < a2; }
+
+/* ---------- движок доступности на сервере ---------- */
 function masterDay(m, dateS, SITE) {
   if (!m || m.active === false) return null;
   var dow = new Date(dateS + 'T12:00:00').getDay();
@@ -84,8 +102,14 @@ function rangeFree(m, dateS, s, e, bookings, blocks, D) {
   if (!day || s < day.open || e > day.close) return false;
   var buf = D.SETTINGS.bufferMin || 0;
   var busy = [];
-  bookings.forEach(function (b) { if (b.masterId === m.id && b.date === dateS && b.status !== 'cancelled') busy.push({ s: +b.startMin, e: +b.endMin, k: 'b' }); });
-  blocks.forEach(function (b) { if ((b.masterId === m.id || b.masterId === 'all') && b.date === dateS) busy.push({ s: +b.startMin, e: +b.endMin, k: 'k' }); });
+  bookings.forEach(function (b) {
+    if (b['Статус'] === 'отменена') return;
+    if (masterIdByName(b['Мастер'], D) === m.id && b['Дата'] === dateS) busy.push({ s: hm2m(b['Начало']), e: hm2m(b['Конец']), k: 'b' });
+  });
+  blocks.forEach(function (b) {
+    var bid = b['Мастер'] === 'все' ? 'all' : masterIdByName(b['Мастер'], D);
+    if ((bid === m.id || bid === 'all') && b['Дата'] === dateS) busy.push({ s: hm2m(b['Начало']), e: hm2m(b['Конец']), k: 'k' });
+  });
   for (var i = 0; i < busy.length; i++) {
     var bs = busy[i].k === 'b' ? busy[i].s - buf : busy[i].s;
     var be = busy[i].k === 'b' ? busy[i].e + buf : busy[i].e;
@@ -111,11 +135,12 @@ function doGet(e) {
     out = route(p);
   } catch (err) {
     out = { ok: false, error: String(err) };
-    log('api-error', '', p.action || '', 'error', String(err));
+    log('ошибка-api', '', p.action || '', 'ошибка', String(err));
   }
   var json = JSON.stringify(out);
   var body = p.cb ? (p.cb + '(' + json + ')') : json;
-  return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.TEXT);
+  /* JSONP из браузера исполняется только с JS-mime */
+  return ContentService.createTextOutput(body).setMimeType(ContentService.MimeType.JAVASCRIPT);
 }
 
 function route(p) {
@@ -123,13 +148,14 @@ function route(p) {
   if (action === 'ping') return { ok: true, service: SALON_TITLE, time: new Date().toISOString() };
 
   if (action === 'busy') {
+    var D = catalog();
     var bs = rowsToObjects(bookingsSheet()).filter(function (b) {
-      return b.status !== 'cancelled' && b.date >= (p.from || '0000-00-00') && b.date <= (p.to || '9999-99-99');
-    }).map(function (b) { // обезличенно: без имён и телефонов клиентов
-      return { id: b.id, masterId: b.masterId, date: b.date, startMin: +b.startMin, endMin: +b.endMin, status: b.status };
+      return b['Статус'] !== 'отменена' && b['Дата'] >= (p.from || '0000-00-00') && b['Дата'] <= (p.to || '9999-99-99');
+    }).map(function (b) { /* обезличенно: без имён и телефонов клиентов */
+      return { id: b['Номер'], masterId: masterIdByName(b['Мастер'], D), date: b['Дата'], startMin: hm2m(b['Начало']), endMin: hm2m(b['Конец']), status: 'confirmed' };
     });
     var ks = rowsToObjects(blocksSheet()).map(function (k) {
-      return { id: k.id, masterId: k.masterId, date: k.date, startMin: +k.startMin, endMin: +k.endMin, reason: k.reason };
+      return { id: k['Номер'], masterId: k['Мастер'] === 'все' ? 'all' : masterIdByName(k['Мастер'], D), date: k['Дата'], startMin: hm2m(k['Начало']), endMin: hm2m(k['Конец']), reason: k['Причина'] };
     });
     return { ok: true, bookings: bs, blocks: ks };
   }
@@ -140,13 +166,15 @@ function route(p) {
   if (p.token !== ADMIN_TOKEN) return { ok: false, error: 'forbidden' };
   if (action === 'list') {
     return { ok: true, bookings: rowsToObjects(bookingsSheet()).filter(function (b) {
-      return b.date >= (p.from || '0000-00-00') && b.date <= (p.to || '9999-99-99');
+      return b['Дата'] >= (p.from || '0000-00-00') && b['Дата'] <= (p.to || '9999-99-99');
     }) };
   }
-  if (action === 'cancel') return setStatus(p.id, 'cancelled');
-  if (action === 'confirm') return setStatus(p.id, 'confirmed');
+  if (action === 'cancel') return setStatus(p.id, 'отменена');
+  if (action === 'confirm') return setStatus(p.id, 'подтверждена');
   if (action === 'block') {
-    blocksSheet().appendRow([p.id || ('BL-' + new Date().getTime()), p.masterId, p.date, +p.startMin, +p.endMin, p.reason || '']);
+    var D2 = catalog();
+    var mname = p.masterId === 'all' ? 'все' : (D2.MASTERS.filter(function (m) { return m.id === p.masterId; })[0] || { name: p.masterId }).name;
+    blocksSheet().appendRow([p.id || ('BL-' + new Date().getTime()), mname, p.date, m2hm(+p.startMin), m2hm(+p.endMin), p.reason || '']);
     return { ok: true };
   }
   if (action === 'unblock') {
@@ -154,8 +182,7 @@ function route(p) {
     for (var i = v.length - 1; i > 0; i--) if (v[i][0] === p.id) { sh.deleteRow(i + 1); return { ok: true }; }
     return { ok: false, error: 'not found' };
   }
-  if (action === 'reload') { dropCatalogCache(); return { ok: true };
-  }
+  if (action === 'reload') { dropCatalogCache(); return { ok: true }; }
   return { ok: false, error: 'unknown action' };
 }
 
@@ -178,18 +205,19 @@ function book(p) {
     /* повторная серверная проверка доступности (защита от двойной записи) */
     if (!rangeFree(master, p.date, start, end, bookings, blocks, D)) return { ok: false, reason: 'conflict' };
     var nowS = new Date();
-    var today = Utilities.formatDate(nowS, D.SITE.timezone || 'Europe/Moscow', 'yyyy-MM-dd');
-    var nowMin = +Utilities.formatDate(nowS, D.SITE.timezone || 'Europe/Moscow', 'HH') * 60 +
-                 +Utilities.formatDate(nowS, D.SITE.timezone || 'Europe/Moscow', 'mm');
+    var tz = D.SITE.timezone || 'Europe/Moscow';
+    var today = Utilities.formatDate(nowS, tz, 'yyyy-MM-dd');
+    var nowMin = +Utilities.formatDate(nowS, tz, 'HH') * 60 + +Utilities.formatDate(nowS, tz, 'mm');
     if (p.date < today || (p.date === today && start <= nowMin)) return { ok: false, reason: 'past' };
     /* цена считается ТОЛЬКО на сервере */
     var price = serverPrice(service, !!p.pension, D.DISCOUNT);
     var maxN = 0;
-    bookings.forEach(function (b) { var mm = /ECL-(\d+)$/.exec(String(b.id)); if (mm) maxN = Math.max(maxN, +mm[1]); });
+    bookings.forEach(function (b) { var mm = /ECL-(\d+)$/.exec(String(b['Номер'])); if (mm) maxN = Math.max(maxN, +mm[1]); });
     var nn = String(maxN + 1); while (nn.length < 3) nn = '0' + nn;
     var id = 'ECL-' + nn;
-    bookingsSheet().appendRow([id, master.id, p.date, start, end, p.name, p.phone, p.comment || '', 'confirmed',
-      price.base, price.final, price.percent, 'site', nowS.toISOString(), nowS.toISOString(), '']);
+    bookingsSheet().appendRow([id, p.date, m2hm(start), m2hm(end), master.name, service.title,
+      p.name, p.phone, p.comment || '', 'подтверждена', price.final, price.percent, 'сайт',
+      Utilities.formatDate(nowS, tz, 'dd.MM.yyyy HH:mm'), '']);
     notifyOwner(p, master, service, price, id, D);
     return { ok: true, id: id, priceFinal: price.final, percent: price.percent };
   } finally {
@@ -200,11 +228,7 @@ function book(p) {
 function setStatus(id, status) {
   var sh = bookingsSheet(), v = sh.getDataRange().getValues();
   for (var i = 1; i < v.length; i++) {
-    if (v[i][0] === id) {
-      sh.getRange(i + 1, 9).setValue(status);
-      sh.getRange(i + 1, 15).setValue(new Date().toISOString());
-      return { ok: true };
-    }
+    if (v[i][0] === id) { sh.getRange(i + 1, 10).setValue(status); return { ok: true }; }
   }
   return { ok: false, error: 'not found' };
 }
@@ -217,20 +241,18 @@ function notifyOwner(p, master, service, price, id, D) {
     'Клиент: ' + p.name + ', ' + p.phone + '\n' +
     'Услуга: ' + service.title + ' (' + service.minutes + ' мин)\n' +
     'Мастер: ' + master.name + '\n' +
-    'Дата и время: ' + p.date + ' ' + hm(start) + '–' + hm(end()) + '\n' +
+    'Дата и время: ' + p.date + ' ' + m2hm(+p.startMin) + '–' + m2hm(+p.startMin + service.minutes) + '\n' +
     'Стоимость: ' + price.final + ' руб.' + (price.percent ? ' (скидка ' + price.percent + '%)' : '') + '\n' +
     'Комментарий: ' + (p.comment || '—') + '\n\nОплата производится в салоне.';
-  function hm(m) { return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
-  function end() { return +p.startMin + service.minutes; }
   try {
     MailApp.sendEmail(OWNER_EMAIL, subject, body);
-    log('booking-mail', OWNER_EMAIL, subject, 'sent', '');
+    log('письмо-заявка', OWNER_EMAIL, subject, 'отправлено', '');
   } catch (e) {
-    log('booking-mail', OWNER_EMAIL, subject, 'error', String(e)); // сбой письма не теряет запись: строка уже в таблице
+    log('письмо-заявка', OWNER_EMAIL, subject, 'ошибка', String(e)); /* сбой письма не теряет запись */
   }
 }
 
-/* ---------- напоминания о записях на завтра (вызвать installReminderTrigger один раз) ---------- */
+/* ---------- напоминания о записях на завтра (триггер по желанию) ---------- */
 function installReminderTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'sendReminders') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('sendReminders').timeBased().everyHours(1).create();
@@ -244,16 +266,15 @@ function sendReminders() {
   var sh = bookingsSheet(), v = sh.getDataRange().getValues();
   var lines = [];
   for (var i = 1; i < v.length; i++) {
-    if (v[i][2] === tomorrow && v[i][8] === 'confirmed' && !v[i][15]) {
-      lines.push('• ' + hmOf(v[i][3]) + '–' + hmOf(v[i][4]) + ' — ' + v[i][5] + ', ' + v[i][6] + ' (мастер ' + v[i][1] + ')');
-      sh.getRange(i + 1, 16).setValue(1);
-      }
+    if (v[i][1] === tomorrow && v[i][9] === 'подтверждена' && !v[i][14]) {
+      lines.push('• ' + v[i][2] + '–' + v[i][3] + ' — ' + v[i][6] + ', ' + v[i][7] + ' (' + v[i][5] + ', мастер ' + v[i][4] + ')');
+      sh.getRange(i + 1, 15).setValue(1);
+    }
   }
   if (!lines.length) return;
   var subject = 'Напоминание: записи на ' + tomorrow + ' (' + lines.length + ')';
   try {
     MailApp.sendEmail(OWNER_EMAIL, subject, 'Завтрашние записи:\n\n' + lines.join('\n') + '\n\nСалон: ' + SALON_TITLE);
-    log('reminder', OWNER_EMAIL, subject, 'sent', '');
-  } catch (e) { log('reminder', OWNER_EMAIL, subject, 'error', String(e)); }
+    log('напоминание', OWNER_EMAIL, subject, 'отправлено', '');
+  } catch (e) { log('напоминание', OWNER_EMAIL, subject, 'ошибка', String(e)); }
 }
-function hmOf(m) { return ('0' + Math.floor(m / 60)).slice(-2) + ':' + ('0' + (m % 60)).slice(-2); }
