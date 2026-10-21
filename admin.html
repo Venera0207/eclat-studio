@@ -178,10 +178,6 @@ body {
   background: #ff4444;
   color: #fff;
 }
-.btn-block {
-  background: #ffaa00;
-  color: #000;
-}
 .empty {
   text-align: center;
   padding: 40px;
@@ -240,7 +236,7 @@ body {
 
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
-    <h1> Админка ÉCLAT STUDIO</h1>
+    <h1>🔐 Админка ÉCLAT STUDIO</h1>
     <input type="password" id="tokenInput" placeholder="Введите ADMIN_TOKEN">
     <button onclick="login()">Войти</button>
   </div>
@@ -303,6 +299,7 @@ var PIPE_URL = 'https://script.google.com/macros/s/AKfycby5QU83WgqvnfSlclUlPVyXu
 var TOKEN = localStorage.getItem('adminToken') || '';
 
 window.onload = function() {
+  console.log('PIPE_URL:', PIPE_URL);
   if (TOKEN) {
     document.getElementById('tokenInput').value = TOKEN;
     login();
@@ -378,7 +375,7 @@ function renderDay(date, bookings, blocks) {
     var card = document.createElement('div');
     card.className = 'booking-card';
     card.style.borderLeftColor = '#ffaa00';
-    card.innerHTML = '<div class="info"><div class="time"> ' + b.start + ' – ' + b.end + '</div><div class="details">Блок: ' + b.master + ' — ' + b.reason + '</div></div>';
+    card.innerHTML = '<div class="info"><div class="time">' + b.start + ' – ' + b.end + '</div><div class="details">Блок: ' + b.master + ' — ' + b.reason + '</div></div>';
     grid.appendChild(card);
   });
   
