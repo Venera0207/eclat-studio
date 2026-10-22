@@ -69,7 +69,7 @@ function doGet(e) {
   try {
     switch (action) {
       /* --- публичные: сайт --- */
-      case 'ping':       out = { ok: true, time: iso(new Date()), version: 2, tz: TZ }; break;
+      case 'ping':       out = { ok: true, time: iso(new Date()), version: 2.2, tz: TZ }; break;
       case 'test':       out = doTest(); break;
       case 'busy':       out = doBusy(p); break;
       case 'book':       out = doBook(p, false); break;
@@ -195,13 +195,23 @@ function sheetNamed(name, head) {
 }
 function bookSheet() { return sheetNamed(BOOK_SHEET, BOOK_HEAD); }
 
-/* appendRow, но сначала помечаем нужные колонки текстовыми — см. BOOK_TEXT_COLS */
+/* Безопасная запись строки.
+   Проверено на бою: просто пометить колонки текстом ДО appendRow НЕДОСТАТОЧНО —
+   appendRow всё равно отдаёт строку парсеру Sheets, и «+7 931…» становится
+   формулой → #ERROR!. Поэтому: (1) помечаем формат, (2) пишем строку,
+   (3) ПЕРЕЗАПИСЫВАЕМ текстовые ячейки через setNumberFormat('@').setValue() —
+   вот этот второй проход и гарантирует, что в ячейке лежит дословный текст.   */
 function appendRowText(s, row, textCols) {
   var r = s.getLastRow() + 1;
-  for (var i = 0; i < textCols.length; i++) {
+  var i, c;
+  for (i = 0; i < textCols.length; i++) {
     try { s.getRange(r, textCols[i]).setNumberFormat('@'); } catch (e) {}
   }
   s.appendRow(row);
+  for (i = 0; i < textCols.length; i++) {
+    c = textCols[i];
+    try { s.getRange(r, c).setNumberFormat('@').setValue(row[c - 1]); } catch (e) {}
+  }
   return r;
 }
 function blockSheet() { return sheetNamed(BLOCK_SHEET, BLOCK_HEAD); }
@@ -265,7 +275,7 @@ function doTest() {
            catalogOk: !!c.ok, pipeUrlOk: true,
            adminTokenSet: ADMIN_TOKEN !== 'ВСТАВЬТЕ_СВОЙ_ТОКЕН',
            brokenRows: broken.length, brokenIds: broken.slice(0, 10),
-           time: iso(new Date()), version: 2 };
+           time: iso(new Date()), version: 2.2 };
 }
 
 /* занятые окна за период — то, что сайт просит перед открытием мастера записи */
