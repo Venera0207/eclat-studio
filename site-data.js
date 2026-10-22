@@ -31,7 +31,7 @@ var SETTINGS = {
   "bufferMin": 10,
   "maxDaysAhead": 60,
   "pipeUrl": "https://script.google.com/macros/s/AKfycby5QU83WgqvnfSlclUlPVyXu9WLTAiYWflEfTrOjw3z1l-dWXKvCu-RzSDSm5oH9peO-w/exec",
-  "assistantUrl": "",
+  "assistantUrl": "https://script.google.com/macros/s/AKfycbwcPiNG4MjbB2IbgRGubYa8H7VXaywI5m3sBTmuRUD6rpb7I4XTVgepkjVmJImHFoAV/exec",
   "pipeNote": "Пока сервер не подключён, записи хранятся локально в браузере (демо-режим). Подключение: backend/README.md"
 };
 
