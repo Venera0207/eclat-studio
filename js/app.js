@@ -378,8 +378,8 @@
     var btn = $('#wiz-next'); btn.disabled = true; btn.textContent = 'Сохраняем…';
     if (SETTINGS.pipeUrl) {
       jsonp(SETTINGS.pipeUrl, { action: 'book', data: JSON.stringify(p) }, function (d) {
-        if (d && d.ok) finish(d.id, 'pipe', '', '');
-        else conflict(d && d.reason === 'conflict' ? 'Это время только что заняли. Выберите другой интервал.' : d && d.error);
+        if (d && d.ok) { absorbPipe(d.booking, p); finish(d.id, 'pipe', '', ''); }
+        else conflict(d && (d.reason === 'conflict' || d.ru) ? (d.ru || 'Это время только что заняли. Выберите другой интервал.') : (d && d.error));
       }, function () {
         /* труба недоступна: запасной путь — локально + резервное письмо */
         localSave(p, 'Сервер записи недоступен — заявка сохранена локально и продублирована резервным письмом.');
@@ -401,10 +401,25 @@
     finish(id, 'pending', '', note);
     mailOwner(p, id, v.price, function (ok, msg) { setMailLine(ok, msg); });
   }
+  /* сервер принял запись — забираем её себе в состояние, чтобы мастер записи
+     сразу увидел занятое окно (и не предложил то же время следующему клиенту) */
+  function absorbPipe(b, p) {
+    if (!b) return;
+    state.bookings = state.bookings.filter(function (x) { return x.id !== b.id; });
+    state.bookings.push({
+      id: b.id, masterId: b.masterId || (p && p.masterId), serviceId: b.serviceId || (p && p.serviceId),
+      date: b.date, startMin: b.startMin, endMin: b.endMin != null ? b.endMin : b.startMin + ((p && p.minutes) || 0),
+      status: b.status || 'confirmed', name: b.name, phone: b.phone, comment: b.comment || '',
+      priceBase: b.priceBase != null ? b.priceBase : b.price, priceFinal: b.price, discountPercent: b.discountPercent || 0,
+      source: b.source || 'site', created: b.created || new Date().toISOString()
+    });
+    state.loaded = true;
+    lsSet(LS_B, state.bookings);
+  }
   function conflict(msg) {
     var btn = $('#wiz-next'); btn.disabled = false; btn.textContent = 'Подтвердить запись';
     toastWiz(msg || 'Не удалось сохранить запись. Попробуйте ещё раз.');
-    if (msg && /занят/i.test(msg)) { W.step = 5; W.startMin = null; loadRemote(function () { drawWiz(); }); }
+    if (msg && /занят|conflict|прошл/i.test(msg)) { W.step = 5; W.startMin = null; loadRemote(function () { drawWiz(); }); }
   }
   function finish(id, mailState, mailMsg, note) {
     var s = curService(), m = masterById(W.masterId), pr = E.calcPrice(s, { pension: W.pension }, DISCOUNT);
