@@ -172,7 +172,7 @@
   function jsonp(url, params, cb, fail) {
     var cbName = 'ea_cb_' + Math.random().toString(36).slice(2);
     var sc = document.createElement('script'), done = false;
-    var timer = setTimeout(function () { cleanup(); fail && fail(); }, 25000);
+    var timer = setTimeout(function () { cleanup(); fail && fail(); }, 40000);
     function cleanup() { clearTimeout(timer); delete window[cbName]; if (sc.parentNode) sc.parentNode.removeChild(sc); }
     window[cbName] = function (d) { if (done) return; done = true; cleanup(); cb(d); };
     params.callback = cbName;
@@ -193,9 +193,17 @@
   function sendLead(name, contact) {
     var full = 'Клиент оставил контакт в чате.\nИмя: ' + name + '\nКонтакт: ' + contact + '\n\nВесь диалог:\n' + transcript();
     if (!PIPE) { addMsg('bot', 'Спасибо! Заявку записала локально — салон свяжется с вами. (Труба ассистента не подключена, поэтому без Telegram-уведомления.)'); return; }
-    jsonp(PIPE, { action: 'lead', name: name, contact: contact, message: full, source: 'eclat-assistant', sid: SID },
-      function () { addMsg('bot', 'Заявка принята! Салон скоро свяжется с вами 💜'); },
-      function () { addMsg('bot', 'Не удалось отправить заявку онлайн. Позвоните нам: ' + SITE.phone + ' — мы обязательно поможем.'); });
+    var attempt = 0;
+    function go() {
+      jsonp(PIPE, { action: 'lead', name: name, contact: contact, message: full, source: 'eclat-assistant', sid: SID },
+        function () { addMsg('bot', 'Заявка принята! Салон скоро свяжется с вами 💜'); },
+        function () {
+          /* труба могла мигнуть (Google изредка отдаёт 400/таймаут) — пробуем ещё раз */
+          if (attempt === 0) { attempt = 1; setTimeout(go, 2000); return; }
+          addMsg('bot', 'Не удалось отправить заявку онлайн. Позвоните нам: ' + SITE.phone + ' — мы обязательно поможем.');
+        });
+    }
+    go();
   }
   /* весь диалог — в лист «Диалоги»: одна строка на разговор, дообновляется по ходу */
   function logDialog(outcomeNow) {
@@ -231,8 +239,10 @@
     var namePart = phone ? text.replace(phone[0], ' ').replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
     if (phone) {
       savedPhone = phone[1].replace(/\s+/g, ' ').trim();
-      if (namePart.length >= 2) { finishLead(namePart, savedPhone); return; }        /* «Венера +7…» разом */
-      if (leadTaken && leadName) { finishLead(leadName, savedPhone); return; }       /* имя пришло раньше */
+      /* остаток без телефона — это имя, только если он не похож на просьбу перезвонить */
+      var nameIsAsk = /перезвон|звон|человек|менеджер|администратор|личн|свяжитесь|оператор|пожалуйста|пусть|мне|нужно|хочу/.test(namePart.toLowerCase());
+      if (namePart.length >= 2 && !nameIsAsk) { finishLead(namePart, savedPhone); return; }   /* «Венера +7…» разом */
+      if (leadTaken && leadName) { finishLead(leadName, savedPhone); return; }                 /* имя пришло раньше */
       leadTaken = true;
       addMsg('bot', 'Телефон записала! Подскажите, как вас зовут?');
       hist.push({ role: 'assistant', text: 'Телефон записала. Как вас зовут?' });
