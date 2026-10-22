@@ -49,6 +49,17 @@ var BOOK_HEAD = ['Номер', 'Дата', 'Начало', 'Конец', 'Мас
                  'Комментарий', 'Статус', 'Цена', 'Скидка', 'Источник', 'Создана',
                  'МастерID', 'УслугаID', 'НачалоМин', 'КонецМин', 'ЦенаБаза', 'Пенсионер'];
 var BLOCK_HEAD = ['ID', 'Дата', 'Начало', 'Конец', 'МастерID', 'Мастер', 'НачалоМин', 'КонецМин', 'Причина', 'Создан'];
+var LOG_HEAD = ['Время', 'Событие', 'ID записи', 'Подробности'];
+
+/* Колонки, которые ОБЯЗАНЫ оставаться текстом (номера колонок с 1).
+   Без этого Google Sheets сам «догадывается» о типе и портит данные:
+     «+7 931 357-96-00»  → формула → #ERROR!   (плюс в начале = знак формулы)
+     «17:00»             → значение времени → при чтении возвращается Date с 1899 годом
+     «2026-10-22 11:15»  → дата/время → в ответе «Thu Oct 22 2026 …»
+   Поэтому перед записью помечаем эти ячейки форматом «@» (текст).          */
+var BOOK_TEXT_COLS  = [2, 3, 4, 5, 6, 7, 8, 9, 14];
+var BLOCK_TEXT_COLS = [2, 3, 4, 5, 6, 9, 10];
+var LOG_TEXT_COLS   = [1, 2, 3, 4];
 
 /* ============================== HTTP ============================== */
 function doGet(e) {
@@ -183,6 +194,16 @@ function sheetNamed(name, head) {
   return s;
 }
 function bookSheet() { return sheetNamed(BOOK_SHEET, BOOK_HEAD); }
+
+/* appendRow, но сначала помечаем нужные колонки текстовыми — см. BOOK_TEXT_COLS */
+function appendRowText(s, row, textCols) {
+  var r = s.getLastRow() + 1;
+  for (var i = 0; i < textCols.length; i++) {
+    try { s.getRange(r, textCols[i]).setNumberFormat('@'); } catch (e) {}
+  }
+  s.appendRow(row);
+  return r;
+}
 function blockSheet() { return sheetNamed(BLOCK_SHEET, BLOCK_HEAD); }
 
 function rows(s) {
@@ -192,17 +213,15 @@ function rows(s) {
 
 function logIt(event, id, extra) {
   try {
-    var s = sheetNamed(LOG_SHEET, ['Время', 'Событие', 'ID записи', 'Подробности']);
-    s.appendRow([stamp(new Date()), event, id || '', extra || '']);
+    var s = sheetNamed(LOG_SHEET, LOG_HEAD);
+    appendRowText(s, [stamp(new Date()), event, id || '', extra || ''], LOG_TEXT_COLS);
   } catch (e) {}
 }
 
 /* ======================= ФОРМАТЫ ДАННЫХ ======================= */
 /* Одна запись в двух «языках»: машинном (для движка сайта) и человеческом (для админки/письма). */
 function bookingDto(r) {
-  var startMin = num(r[16]), endMin = num(r[17]);
-  if (!startMin && r[2]) startMin = hm2m(ds(r[2]));
-  if (!endMin && r[3]) endMin = hm2m(ds(r[3]));
+  var startMin = minutesOf(r[16], r[2]), endMin = minutesOf(r[17], r[3]);
   var price = num(r[10]), base = num(r[18]) || price;
   return {
     id: str(r[0]), date: ds(r[1]),
@@ -217,9 +236,7 @@ function bookingDto(r) {
   };
 }
 function blockDto(r) {
-  var startMin = num(r[6]), endMin = num(r[7]);
-  if (!startMin && r[2]) startMin = hm2m(ds(r[2]));
-  if (!endMin && r[3]) endMin = hm2m(ds(r[3]));
+  var startMin = minutesOf(r[6], r[2]), endMin = minutesOf(r[7], r[3]);
   return { id: str(r[0]), date: ds(r[1]), start: hm(startMin), end: hm(endMin),
            startMin: startMin, endMin: endMin, masterId: str(r[4]) || 'all',
            master: str(r[5]) || 'Все мастера', reason: str(r[8]) };
@@ -233,10 +250,21 @@ function ruStatus(s) { return /^отмен/i.test(str(s)) ? 'отменена' :
 function doTest() {
   var st = doStats();
   var c = catalog();
+  /* строки, испорченные старой версией: телефон #ERROR!, пустое время и т.п. */
+  var broken = [];
+  rows(bookSheet()).forEach(function (r) {
+    var why = [];
+    if (/#(ERROR|REF|VALUE|NAME|N\/A)/.test(str(r[7]))) why.push('телефон');
+    if (!str(r[6])) why.push('имя');
+    if (!minutesOf(r[16], r[2]) && !minutesOf(r[17], r[3])) why.push('время');
+    if (!ds(r[1])) why.push('дата');
+    if (why.length) broken.push(str(r[0]) + ' (' + why.join(', ') + ')');
+  });
   return { ok: true, total: st.total, today: st.today, canceled: st.canceled,
            services: c.SERVICES.length, masters: c.MASTERS.length,
            catalogOk: !!c.ok, pipeUrlOk: true,
            adminTokenSet: ADMIN_TOKEN !== 'ВСТАВЬТЕ_СВОЙ_ТОКЕН',
+           brokenRows: broken.length, brokenIds: broken.slice(0, 10),
            time: iso(new Date()), version: 2 };
 }
 
@@ -316,7 +344,7 @@ function doAddBlock(p) {
   }
   var s = blockSheet();
   var id = 'BLK-' + fmt(new Date(), 'MMdd-HHmmss');
-  s.appendRow([id, date, hm(startMin), hm(endMin), masterId, masterName, startMin, endMin, str(p.reason || 'Блок'), stamp(new Date())]);
+  appendRowText(s, [id, date, hm(startMin), hm(endMin), masterId, masterName, startMin, endMin, str(p.reason || 'Блок'), stamp(new Date())], BLOCK_TEXT_COLS);
   logIt('добавлен блок', id, date + ' ' + hm(startMin) + '–' + hm(endMin) + ' ' + masterName);
   return { ok: true, id: id, date: date, startMin: startMin, endMin: endMin, masterId: masterId, master: masterName };
 }
@@ -354,9 +382,9 @@ function doBook(p, isManual) {
                         ru: 'Это время уже занято (' + clash.who + '). Выберите другой интервал.' };
 
     var s = bookSheet();
-    s.appendRow([rec.id, rec.date, rec.start, rec.end, rec.master, rec.service, rec.name, rec.phone,
+    appendRowText(s, [rec.id, rec.date, rec.start, rec.end, rec.master, rec.service, rec.name, rec.phone,
                  rec.comment, rec.statusRu, rec.price, rec.discountPercent, rec.source, rec.created,
-                 rec.masterId, rec.serviceId, rec.startMin, rec.endMin, rec.priceBase, rec.pension ? 'да' : 'нет']);
+                 rec.masterId, rec.serviceId, rec.startMin, rec.endMin, rec.priceBase, rec.pension ? 'да' : 'нет'], BOOK_TEXT_COLS);
 
     /* письмо — после сохранения: сбой почты не должен терять запись */
     var mailOk = true, mailErr = '';
@@ -463,7 +491,7 @@ function findClash(rec, ignoreId) {
     if (ignoreId && str(r[0]) === ignoreId) return;
     if (ds(r[1]) !== rec.date) return;
     if (str(r[14]) && str(r[14]) !== rec.masterId) return;
-    mine.push({ s: num(r[16]) || hm2m(ds(r[2])), e: num(r[17]) || hm2m(ds(r[3])), who: 'запись ' + str(r[0]) });
+    mine.push({ s: minutesOf(r[16], r[2]), e: minutesOf(r[17], r[3]), who: 'запись ' + str(r[0]) });
   });
   for (var i = 0; i < mine.length; i++) {
     if (overlap(rec.startMin, rec.endMin, mine[i].s - buf, mine[i].e + buf)) return mine[i];
@@ -473,7 +501,7 @@ function findClash(rec, ignoreId) {
     if (ds(r[1]) !== rec.date) return;
     var mid = str(r[4]) || 'all';
     if (mid !== 'all' && mid !== rec.masterId) return;
-    blocks.push({ s: num(r[6]) || hm2m(ds(r[2])), e: num(r[7]) || hm2m(ds(r[3])), who: 'блок: ' + (str(r[8]) || str(r[5])) });
+    blocks.push({ s: minutesOf(r[6], r[2]), e: minutesOf(r[7], r[3]), who: 'блок: ' + (str(r[8]) || str(r[5])) });
   });
   for (var j = 0; j < blocks.length; j++) {
     if (overlap(rec.startMin, rec.endMin, blocks[j].s, blocks[j].e)) return blocks[j];
@@ -588,7 +616,8 @@ function nextId() {
     if (s.getLastRow() >= 2) {
       var col = s.getRange(2, 1, s.getLastRow() - 1, 1).getValues();
       for (var i = 0; i < col.length; i++) {
-        var m = /ECL-(\d+)/.exec(str(col[i][0]));
+        /* только «чистые» номера ECL-0001; старые ECL-1022-082712 игнорируем */
+        var m = /^ECL-(\d{1,6})$/.exec(str(col[i][0]));
         if (m) max = Math.max(max, parseInt(m[1], 10));
       }
     }
@@ -596,6 +625,18 @@ function nextId() {
   var n = String(max + 1);
   while (n.length < 4) n = '0' + n;
   return 'ECL-' + n;
+}
+
+/* минуты из ячейки: сначала «машинная» колонка, потом человекочитаемая.
+   Умеет и строку «17:00», и Date-ячейку (так Google хранит время в старых строках). */
+function minutesOf(minCell, timeCell) {
+  if (minCell !== '' && minCell != null && isFinite(parseFloat(minCell))) return num(minCell);
+  return cellMinutes(timeCell);
+}
+function cellMinutes(v) {
+  if (v == null || v === '') return 0;
+  if (v instanceof Date) return hm2m(fmt(v, 'HH:mm'));
+  return hm2m(String(v));
 }
 
 function overlap(a1, a2, b1, b2) { return a1 < b2 && b1 < a2; }
@@ -606,7 +647,11 @@ function hm(m) {
   return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm;
 }
 function num(v) { var n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(n) ? n : 0; }
-function str(v) { return v == null ? '' : String(v).trim(); }
+function str(v) {
+  if (v == null) return '';
+  if (v instanceof Date) return stamp(v);   /* иначе получим «Thu Oct 22 2026 …» */
+  return String(v).trim();
+}
 function digits(v) { return String(v == null ? '' : v).replace(/\D/g, ''); }
 function cleanPhone(v) {
   var d = digits(v);
@@ -618,7 +663,11 @@ function cleanPhone(v) {
 /* дата из ячейки: Date, «2026-10-22», «22.10.2026» → всегда «YYYY-MM-DD» */
 function ds(v) {
   if (v == null || v === '') return '';
-  if (v instanceof Date) return fmt(v, 'yyyy-MM-dd');
+  if (v instanceof Date) {
+    /* ячейка «17:00» в старых строках возвращается датой 1899 года — это НЕ дата */
+    if (v.getFullYear() < 1950) return '';
+    return fmt(v, 'yyyy-MM-dd');
+  }
   var s = String(v).trim();
   var m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
   if (m) return m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]);
