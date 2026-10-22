@@ -557,15 +557,23 @@
     if (e.key === 'Escape') { closeWiz(); closeMenu(); $('#lightbox').classList.remove('on'); }
   });
 
-  /* ---------- Telegram Mini App ---------- */
-  var TG = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) ? window.Telegram.WebApp : null;
-  if (TG) {
+  /* ---------- Telegram Mini App ----------
+     Скрипт Телеграма теперь грузится ПОСЛЕДНИМ и не имеет права тормозить сайт.
+     Поэтому мини-апп включаем лениво: сразу, если скрипт уже есть,
+     и ещё раз по событию load, когда он доедет. */
+  var TG = null;
+  function initTG() {
+    var T = (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) ? window.Telegram.WebApp : null;
+    if (!T || TG) return;
+    TG = T;
     TG.ready(); TG.expand();
     document.body.classList.add('tg');
     TG.MainButton.setText('Записаться онлайн');
     TG.MainButton.show();
     TG.MainButton.onClick(function () { loadRemote(function () { openWiz({}); }); });
   }
+  initTG();
+  window.addEventListener('load', initTG);
 
   /* доступ ассистенту к занятым окнам (живой календарь) */
   window.ECLAT_BOOKINGS = function () { return state.bookings; };
