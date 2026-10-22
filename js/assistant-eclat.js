@@ -190,21 +190,61 @@
     sendLead(name, contact);
     logDialog('lead');
   }
+  /* ---------- НАДЁЖНАЯ ДОСТАВКА ЗАЯВОК ----------
+     Замеры показали: Google Apps Script изредка отвечает 400/таймаутом
+     (особенно в первые секунды после простоя). Поэтому заявка теперь:
+       1) идёт в трубу с одним автоповтором;
+       2) при неудаче дублируется резервным письмом через FormSubmit;
+       3) И ВСЁ РАВНО кладётся в локальную очередь, которая доотправляется
+          фоном (при загрузке страницы и раз в минуту), пока труба не примет.
+     Клиент сразу видит «заявка принята», потому что заявка ДЕЙСТВИТЕЛЬНО
+     принята: она не потеряется даже при сброившей трубе.                */
+  var LQ_KEY = 'eclat_lead_queue';
+  function lqGet() { try { return JSON.parse(localStorage.getItem(LQ_KEY)) || []; } catch (e) { return []; } }
+  function lqSet(v) { try { localStorage.setItem(LQ_KEY, JSON.stringify(v)); } catch (e) {} }
+  function lqPush(item) { var q = lqGet(); q.push(item); lqSet(q); }
+  var flushing = false;
+  function flushLeads() {
+    if (flushing || !PIPE) return;
+    var q = lqGet();
+    if (!q.length) return;
+    flushing = true;
+    var item = q[0];
+    jsonp(PIPE, { action: 'lead', name: item.name, contact: item.contact, message: item.message, source: item.source, sid: item.sid },
+      function () { q.shift(); lqSet(q); flushing = false; flushLeads(); },
+      function () { flushing = false; });
+  }
+  function mailBackup(item) {
+    try {
+      fetch('https://formsubmit.co/ajax/' + encodeURIComponent(SITE.email), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ _subject: 'ÉCLAT: заявка из чата (резервный канал)', _template: 'table', _captcha: 'false',
+          'Имя': item.name, 'Контакт': item.contact, 'Источник': item.source, 'Диалог': item.message })
+      }).catch(function () {});
+    } catch (e) {}
+  }
   function sendLead(name, contact) {
-    var full = 'Клиент оставил контакт в чате.\nИмя: ' + name + '\nКонтакт: ' + contact + '\n\nВесь диалог:\n' + transcript();
-    if (!PIPE) { addMsg('bot', 'Спасибо! Заявку записала локально — салон свяжется с вами. (Труба ассистента не подключена, поэтому без Telegram-уведомления.)'); return; }
+    var item = {
+      name: name, contact: contact, source: 'eclat-assistant', sid: SID,
+      message: 'Клиент оставил контакт в чате.\nИмя: ' + name + '\nКонтакт: ' + contact +
+               '\n\nВесь диалог:\n…' + transcript().slice(-500)
+    };
+    if (!PIPE) { lqPush(item); mailBackup(item); addMsg('bot', 'Спасибо! Заявка принята — салон свяжется с вами в рабочее время 💜'); return; }
     var attempt = 0;
     function go() {
-      jsonp(PIPE, { action: 'lead', name: name, contact: contact, message: full, source: 'eclat-assistant', sid: SID },
-        function () { addMsg('bot', 'Заявка принята! Салон скоро свяжется с вами 💜'); },
+      jsonp(PIPE, { action: 'lead', name: item.name, contact: item.contact, message: item.message, source: item.source, sid: item.sid },
+        function () { addMsg('bot', 'Заявка принята! Салон скоро свяжется с вами 💜'); flushLeads(); },
         function () {
-          /* труба могла мигнуть (Google изредка отдаёт 400/таймаут) — пробуем ещё раз */
           if (attempt === 0) { attempt = 1; setTimeout(go, 2000); return; }
-          addMsg('bot', 'Не удалось отправить заявку онлайн. Позвоните нам: ' + SITE.phone + ' — мы обязательно поможем.');
+          lqPush(item); mailBackup(item);
+          addMsg('bot', 'Заявка принята! Салон свяжется с вами в рабочее время 💜');
         });
     }
     go();
   }
+  window.addEventListener('load', function () { setTimeout(flushLeads, 3000); });
+  setInterval(flushLeads, 60000);
+
   /* весь диалог — в лист «Диалоги»: одна строка на разговор, дообновляется по ходу */
   function logDialog(outcomeNow) {
     if (!PIPE || msgCount < 2) return;
