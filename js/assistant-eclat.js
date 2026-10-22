@@ -15,6 +15,10 @@
   'use strict';
   var E = window.ECLAT;
   var PIPE = (window.SETTINGS && SETTINGS.assistantUrl) ? SETTINGS.assistantUrl : '';
+  /* Ассистент не подключён — кнопку НЕ показываем: иначе клиенты оставляли бы
+     имя и телефон «в никуда» (они оседали бы в их браузере). Как только в
+     site-data.js появится assistantUrl, значок оживёт сам.                */
+  if (!PIPE) return;
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var money = function (n) { return Math.round(n).toLocaleString('ru-RU') + ' ₽'; };
   var hist = [], outcome = 'kb', msgCount = 0, leadTaken = false;
