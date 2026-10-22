@@ -22,6 +22,7 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
   var money = function (n) { return Math.round(n).toLocaleString('ru-RU') + ' ₽'; };
   var hist = [], outcome = 'kb', msgCount = 0, leadTaken = false;
+  var leadName = '', savedPhone = '';   /* половинки заявки, пока клиент досылает вторую */
   var SID = 'ea-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
   function transcript() {
     return hist.map(function (h) { return (h.role === 'user' ? 'Клиент: ' : 'Ассистент: ') + h.text; }).join('\n');
@@ -184,6 +185,11 @@
     jsonp(PIPE, { action: 'chat', msg: text, hist: JSON.stringify(hist.slice(-6)) },
       function (d) { cb(d && d.ok ? d.reply : null); }, function () { cb(null); });
   }
+  function finishLead(name, contact) {
+    leadTaken = true;
+    sendLead(name, contact);
+    logDialog('lead');
+  }
   function sendLead(name, contact) {
     var full = 'Клиент оставил контакт в чате.\nИмя: ' + name + '\nКонтакт: ' + contact + '\n\nВесь диалог:\n' + transcript();
     if (!PIPE) { addMsg('bot', 'Спасибо! Заявку записала локально — салон свяжется с вами. (Труба ассистента не подключена, поэтому без Telegram-уведомления.)'); return; }
@@ -218,18 +224,33 @@
       setChips(['Записаться', 'Цены мужских услуг', 'Пенсионерам', 'Адрес и маршрут']);
       return;
     }
+    /* ЗАЯВКИ: принимаем имя и телефон в ЛЮБОМ порядке и даже в одном сообщении.
+       Раньше сообщение с телефоном всегда уходило в ветку «попроси имя и телефон»
+       и клиент попадал в бесконечный круг. */
     var phone = text.match(/(\+?\d[\d\s()-]{9,})/);
-    if (phone || /перезвон|человек|менеджер|администратор|личн/.test(text.toLowerCase())) {
+    var namePart = phone ? text.replace(phone[0], ' ').replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+    if (phone) {
+      savedPhone = phone[1].replace(/\s+/g, ' ').trim();
+      if (namePart.length >= 2) { finishLead(namePart, savedPhone); return; }        /* «Венера +7…» разом */
+      if (leadTaken && leadName) { finishLead(leadName, savedPhone); return; }       /* имя пришло раньше */
+      leadTaken = true;
+      addMsg('bot', 'Телефон записала! Подскажите, как вас зовут?');
+      hist.push({ role: 'assistant', text: 'Телефон записала. Как вас зовут?' });
+      outcome = 'lead';
+      return;
+    }
+    if (leadTaken) {
+      if (savedPhone) { finishLead(text.replace(/[,;]+/g, ' ').trim(), savedPhone); return; }  /* телефон был раньше */
+      leadName = text.replace(/[,;]+/g, ' ').trim();
+      addMsg('bot', 'Спасибо, ' + esc(leadName) + '! Теперь телефон, пожалуйста 🙂\nПример: +7 931 000-00-00');
+      hist.push({ role: 'assistant', text: 'Теперь телефон, пожалуйста.' });
+      return;
+    }
+    if (/перезвон|человек|менеджер|администратор|личн/.test(text.toLowerCase())) {
       leadTaken = true;
       addMsg('bot', 'Передам вас салону! Оставьте, пожалуйста, имя и телефон — администратор свяжется в рабочее время.\nПример: «Анна, +7 931 000-00-00»');
       hist.push({ role: 'assistant', text: 'Оставьте имя и телефон — администратор свяжется.' });
       outcome = 'lead';
-      return;
-    }
-    if (leadTaken && /,|телефон|\+7|8 \d/.test(text)) {
-      var parts = text.split(/[,;]+/);
-      sendLead(parts[0].trim(), (text.match(/(\+?\d[\d\s()-]{9,})/) || [parts[1] || ''])[0]);
-      logDialog('lead');
       return;
     }
     typing(true);
