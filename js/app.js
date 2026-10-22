@@ -21,7 +21,7 @@
     var cbName = 'eclat_cb_' + Math.random().toString(36).slice(2);
     var sc = document.createElement('script');
     var done = false;
-    var timer = setTimeout(function () { cleanup(); fail && fail('timeout'); }, ms || 15000);
+    var timer = setTimeout(function () { cleanup(); fail && fail('timeout'); }, ms || 30000);
     function cleanup() { clearTimeout(timer); delete window[cbName]; if (sc.parentNode) sc.parentNode.removeChild(sc); }
     window[cbName] = function (data) { if (done) return; done = true; cleanup(); cb(data); };
     params.cb = cbName;
@@ -383,7 +383,7 @@
       }, function () {
         /* труба недоступна: запасной путь — локально + резервное письмо */
         localSave(p, 'Сервер записи недоступен — заявка сохранена локально и продублирована резервным письмом.');
-      });
+      }, 45000);
     } else {
       setTimeout(function () { localSave(p, ''); }, 350);
     }
@@ -486,8 +486,8 @@
     var done = false, ctl = ('AbortController' in window) ? new AbortController() : null;
     var timer = setTimeout(function () {
       if (ctl) ctl.abort();
-      if (!done) { done = true; cb && cb(false, 'почтовый сервис не ответил за 15 секунд'); }
-    }, 15000);
+      if (!done) { done = true; cb && cb(false, 'почтовый сервис не ответил за 20 секунд'); }
+    }, 20000);
     fetch('https://formsubmit.co/ajax/' + encodeURIComponent(SITE.email), {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(body), signal: ctl ? ctl.signal : undefined
