@@ -12,437 +12,610 @@ body {
   color: #e0e0e0;
   min-height: 100vh;
 }
-.login-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-}
+.login-screen { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
 .login-box {
-  background: #15152a;
-  padding: 40px;
-  border-radius: 20px;
-  box-shadow: 0 0 40px rgba(138, 43, 226, 0.3);
-  text-align: center;
+  background: #15152a; padding: 40px; border-radius: 20px;
+  box-shadow: 0 0 40px rgba(138, 43, 226, 0.3); text-align: center; max-width: 440px; width: 100%;
 }
-.login-box h1 {
-  color: #ff1493;
-  margin-bottom: 20px;
-  font-size: 28px;
-}
+.login-box h1 { color: #ff1493; margin-bottom: 10px; font-size: 26px; }
+.login-box p.hint { color: #888; font-size: 13px; line-height: 1.5; margin-bottom: 20px; text-align: left; }
 .login-box input {
-  width: 100%;
-  padding: 15px;
-  border: 2px solid #8a2be2;
-  border-radius: 10px;
-  background: #0a0a1a;
-  color: #fff;
-  font-size: 16px;
-  margin-bottom: 20px;
+  width: 100%; padding: 15px; border: 2px solid #8a2be2; border-radius: 10px;
+  background: #0a0a1a; color: #fff; font-size: 16px; margin-bottom: 14px;
 }
 .login-box button {
-  width: 100%;
-  padding: 15px;
-  background: linear-gradient(135deg, #8a2be2, #ff1493);
-  border: none;
-  border-radius: 10px;
-  color: #fff;
-  font-size: 16px;
-  cursor: pointer;
-  font-weight: bold;
+  width: 100%; padding: 15px; background: linear-gradient(135deg, #8a2be2, #ff1493);
+  border: none; border-radius: 10px; color: #fff; font-size: 16px; cursor: pointer; font-weight: bold;
 }
-.login-box button:hover {
-  opacity: 0.9;
-}
-.dashboard {
-  display: none;
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
+.login-box button:hover { opacity: .9; }
+.err { color: #ff6b6b; font-size: 14px; margin-bottom: 12px; min-height: 18px; }
+.dashboard { display: none; padding: 20px; max-width: 1200px; margin: 0 auto; }
 .header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #8a2be2;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 16px; padding-bottom: 16px; border-bottom: 2px solid #8a2be2;
 }
-.header h1 {
-  color: #ff1493;
-  font-size: 32px;
-}
+.header h1 { color: #ff1493; font-size: 28px; }
+.header .hbtns { display: flex; gap: 10px; flex-wrap: wrap; }
 .header button {
-  padding: 10px 20px;
-  background: #ff1493;
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  cursor: pointer;
-  font-weight: bold;
+  padding: 10px 18px; background: #ff1493; border: none; border-radius: 8px;
+  color: #fff; cursor: pointer; font-weight: bold;
 }
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+.header button.ghost { background: #242444; color: #cfcce0; }
+/* строка состояния трубы */
+.status {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: #15152a; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px;
+  font-size: 14px; color: #aaa; border-left: 4px solid #555;
 }
-.stat-card {
-  background: #15152a;
-  padding: 20px;
-  border-radius: 15px;
-  text-align: center;
-  box-shadow: 0 0 20px rgba(138, 43, 226, 0.2);
-}
-.stat-card .number {
-  font-size: 36px;
-  font-weight: bold;
-  color: #00bfff;
-}
-.stat-card .label {
-  color: #888;
-  margin-top: 5px;
-}
-.controls {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 30px;
-  flex-wrap: wrap;
-}
+.status.ok { border-left-color: #2ecc71; }
+.status.bad { border-left-color: #ff4444; }
+.status.wait { border-left-color: #ffaa00; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #555; flex: none; }
+.status.ok .dot { background: #2ecc71; box-shadow: 0 0 10px #2ecc71; }
+.status.bad .dot { background: #ff4444; box-shadow: 0 0 10px #ff4444; }
+.status.wait .dot { background: #ffaa00; animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #15152a; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(138, 43, 226, 0.2); }
+.stat-card .number { font-size: 34px; font-weight: bold; color: #00bfff; }
+.stat-card .label { color: #888; margin-top: 5px; font-size: 14px; }
+.controls { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
 .controls input, .controls select {
-  padding: 12px;
-  border: 2px solid #8a2be2;
-  border-radius: 8px;
-  background: #0a0a1a;
-  color: #fff;
-  font-size: 14px;
+  padding: 12px; border: 2px solid #8a2be2; border-radius: 8px;
+  background: #0a0a1a; color: #fff; font-size: 14px;
 }
 .controls button {
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #8a2be2, #ff1493);
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  cursor: pointer;
-  font-weight: bold;
+  padding: 12px 22px; background: linear-gradient(135deg, #8a2be2, #ff1493);
+  border: none; border-radius: 8px; color: #fff; cursor: pointer; font-weight: bold;
 }
-.calendar {
-  background: #15152a;
-  padding: 20px;
-  border-radius: 15px;
-  margin-bottom: 30px;
-}
-.calendar h2 {
-  color: #00bfff;
-  margin-bottom: 20px;
-}
-.day-grid {
-  display: grid;
-  gap: 10px;
-}
+.controls button:disabled { opacity: .45; cursor: wait; }
+.calendar { background: #15152a; padding: 20px; border-radius: 15px; margin-bottom: 24px; }
+.calendar h2 { color: #00bfff; margin-bottom: 16px; font-size: 20px; }
+.day-grid { display: grid; gap: 10px; }
 .booking-card {
-  background: #0a0a1a;
-  padding: 15px;
-  border-radius: 10px;
-  border-left: 4px solid #8a2be2;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
+  background: #0a0a1a; padding: 15px; border-radius: 10px; border-left: 4px solid #8a2be2;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
 }
-.booking-card .info {
-  flex: 1;
-}
-.booking-card .time {
-  color: #00bfff;
-  font-weight: bold;
-  font-size: 18px;
-}
-.booking-card .details {
-  color: #aaa;
-  margin-top: 5px;
-}
-.booking-card .actions {
-  display: flex;
-  gap: 10px;
-}
+.booking-card.block { border-left-color: #ffaa00; }
+.booking-card.off { border-left-color: #ff4444; opacity: .55; }
+.booking-card .info { flex: 1; min-width: 220px; }
+.booking-card .time { color: #00bfff; font-weight: bold; font-size: 18px; }
+.booking-card .num { color: #888; font-size: 12px; margin-left: 8px; }
+.booking-card .details { color: #aaa; margin-top: 5px; line-height: 1.5; }
+.booking-card .details a { color: #ff9ad5; text-decoration: none; }
+.booking-card .price { color: #2ecc71; font-weight: bold; }
+.booking-card .actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .booking-card .actions button {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
+  padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px;
 }
-.btn-cancel {
-  background: #ff4444;
-  color: #fff;
-}
-.empty {
-  text-align: center;
-  padding: 40px;
-  color: #666;
-}
+.btn-cancel { background: #ff4444; color: #fff; }
+.btn-unblock { background: #ffaa00; color: #231a00; }
+.empty { text-align: center; padding: 40px; color: #666; }
 .modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.8);
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85);
+  align-items: center; justify-content: center; z-index: 1000; padding: 20px; overflow-y: auto;
 }
-.modal-content {
-  background: #15152a;
-  padding: 30px;
-  border-radius: 15px;
-  max-width: 500px;
-  width: 90%;
-}
-.modal-content h3 {
-  color: #ff1493;
-  margin-bottom: 20px;
-}
-.modal-content input, .modal-content select {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #8a2be2;
-  border-radius: 8px;
-  background: #0a0a1a;
-  color: #fff;
-  margin-bottom: 15px;
-  font-size: 14px;
+.modal-content { background: #15152a; padding: 28px; border-radius: 15px; max-width: 520px; width: 100%; }
+.modal-content h3 { color: #ff1493; margin-bottom: 18px; }
+.modal-content label { display: block; color: #888; font-size: 12px; margin: 0 0 5px 2px; }
+.modal-content input, .modal-content select, .modal-content textarea {
+  width: 100%; padding: 12px; border: 2px solid #8a2be2; border-radius: 8px;
+  background: #0a0a1a; color: #fff; margin-bottom: 14px; font-size: 14px; font-family: inherit;
 }
 .modal-content button {
-  width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #8a2be2, #ff1493);
-  border: none;
-  border-radius: 8px;
-  color: #fff;
-  cursor: pointer;
-  font-weight: bold;
-  margin-bottom: 10px;
+  width: 100%; padding: 12px; background: linear-gradient(135deg, #8a2be2, #ff1493);
+  border: none; border-radius: 10px; color: #fff; margin-bottom: 10px; font-size: 15px; cursor: pointer; font-weight: bold;
 }
-.modal-content .close {
-  background: #444;
+.modal-content button:disabled { opacity: .5; cursor: wait; }
+.modal-content .close { background: #33334d; }
+.calc { background: #0a0a1a; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: 14px; color: #aaa; }
+.calc b { color: #2ecc71; font-size: 18px; }
+/* всплывающие сообщения вместо alert() */
+#toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 10px; z-index: 2000; max-width: 360px; }
+.toast {
+  background: #15152a; border-left: 4px solid #00bfff; padding: 13px 16px; border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.6); font-size: 14px; line-height: 1.45; animation: slide .2s ease;
+}
+.toast.ok { border-left-color: #2ecc71; }
+.toast.bad { border-left-color: #ff4444; }
+@keyframes slide { from { transform: translateX(20px); opacity: 0; } }
+.small { font-size: 12px; color: #777; }
+@media (max-width: 640px) {
+  .header h1 { font-size: 22px; }
+  .booking-card { flex-direction: column; align-items: stretch; }
 }
 </style>
 </head>
 <body>
 
+<!-- ЭКРАН ВХОДА -->
 <div class="login-screen" id="loginScreen">
   <div class="login-box">
     <h1>🔐 Админка ÉCLAT STUDIO</h1>
-    <input type="password" id="tokenInput" placeholder="Введите ADMIN_TOKEN">
-    <button onclick="login()">Войти</button>
+    <p class="hint">
+      Токен — это строка <b>ADMIN_TOKEN</b> из вашего скрипта записи
+      (script.google.com → проект «ÉCLAT bookings» → первая строка настроек).
+      Он хранится только в этом браузере и нужен, чтобы отменять записи и ставить блоки.
+    </p>
+    <div class="err" id="loginErr"></div>
+    <input type="password" id="tokenInput" placeholder="Введите ADMIN_TOKEN" autocomplete="current-password">
+    <button id="loginBtn">Войти</button>
+    <p class="small" style="margin-top:14px" id="loginPipe"></p>
   </div>
 </div>
 
+<!-- ПАНЕЛЬ -->
 <div class="dashboard" id="dashboard">
   <div class="header">
     <h1>Админка ÉCLAT STUDIO</h1>
-    <button onclick="logout()">Выйти</button>
+    <div class="hbtns">
+      <button id="btnManual">+ Запись вручную</button>
+      <button class="ghost" id="btnSite">Сайт ↗</button>
+      <button class="ghost" id="btnLogout">Выйти</button>
+    </div>
+  </div>
+
+  <div class="status wait" id="statusBar">
+    <span class="dot"></span>
+    <span id="statusText">Проверяем трубу…</span>
   </div>
 
   <div class="stats">
-    <div class="stat-card">
-      <div class="number" id="statTotal">0</div>
-      <div class="label">Всего записей</div>
-    </div>
-    <div class="stat-card">
-      <div class="number" id="statToday">0</div>
-      <div class="label">Сегодня</div>
-    </div>
-    <div class="stat-card">
-      <div class="number" id="statCanceled">0</div>
-      <div class="label">Отменено</div>
-    </div>
+    <div class="stat-card"><div class="number" id="statTotal">—</div><div class="label">Всего записей</div></div>
+    <div class="stat-card"><div class="number" id="statToday">—</div><div class="label">Сегодня</div></div>
+    <div class="stat-card"><div class="number" id="statCanceled">—</div><div class="label">Отменено</div></div>
+    <div class="stat-card"><div class="number" id="statRevenue">—</div><div class="label">Сумма активных, ₽</div></div>
   </div>
 
   <div class="controls">
     <input type="date" id="dateInput">
-    <button onclick="loadDay()">Загрузить день</button>
-    <button onclick="showBlockModal()">+ Блок времени</button>
+    <button id="btnPrev" title="Предыдущий день">←</button>
+    <button id="btnToday">Сегодня</button>
+    <button id="btnNext" title="Следующий день">→</button>
+    <button id="btnBlock">+ Блок времени</button>
+    <button id="btnRefresh" class="" title="Обновить">⟳</button>
   </div>
 
   <div class="calendar">
     <h2 id="calendarTitle">Записи на день</h2>
     <div class="day-grid" id="dayGrid">
-      <div class="empty">Выберите дату и нажмите «Загрузить день»</div>
+      <div class="empty">Загружаем…</div>
     </div>
   </div>
+
+  <p class="small">
+    Данные хранятся в Google Sheets («ÉCLAT STUDIO — база записей»).
+    Отмена записи не удаляет строку, а помечает её «отменена» — история сохраняется.
+  </p>
 </div>
 
+<!-- МОДАЛКА: БЛОК ВРЕМЕНИ -->
 <div class="modal" id="blockModal">
   <div class="modal-content">
-    <h3>Добавить блок времени</h3>
+    <h3>Заблокировать время</h3>
+    <div class="err" id="blockErr"></div>
+    <label>Дата</label>
     <input type="date" id="blockDate">
-    <input type="time" id="blockStart" placeholder="Начало">
-    <input type="time" id="blockEnd" placeholder="Конец">
-    <select id="blockMaster">
-      <option value="Все">Все мастера</option>
-      <option value="Алиса">Алиса</option>
-      <option value="Диана">Диана</option>
-    </select>
-    <input type="text" id="blockReason" placeholder="Причина (обед, ремонт и т.д.)">
-    <button onclick="addBlock()">Добавить блок</button>
-    <button class="close" onclick="closeBlockModal()">Отмена</button>
+    <label>Начало</label>
+    <input type="time" id="blockStart" step="900">
+    <label>Конец</label>
+    <input type="time" id="blockEnd" step="900">
+    <label>Мастер</label>
+    <select id="blockMaster"></select>
+    <label>Причина</label>
+    <input type="text" id="blockReason" placeholder="Обед, ремонт, съёмка…">
+    <button id="blockSave">Добавить блок</button>
+    <button class="close" id="blockClose">Отмена</button>
   </div>
 </div>
 
+<!-- МОДАЛКА: ЗАПИСЬ ВРУЧНУЮ (клиент позвонил) -->
+<div class="modal" id="manualModal">
+  <div class="modal-content">
+    <h3>Запись вручную</h3>
+    <div class="err" id="manualErr"></div>
+    <label>Дата</label>
+    <input type="date" id="mDate">
+    <label>Услуга</label>
+    <select id="mService"></select>
+    <label>Мастер</label>
+    <select id="mMaster"></select>
+    <label>Время начала</label>
+    <input type="time" id="mStart" step="900">
+    <label>Имя клиента</label>
+    <input type="text" id="mName" placeholder="Как записать в базу">
+    <label>Телефон</label>
+    <input type="tel" id="mPhone" placeholder="+7 9…">
+    <label>Комментарий</label>
+    <textarea id="mComment" rows="2" placeholder="Необязательно"></textarea>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#ccc;font-size:14px">
+      <input type="checkbox" id="mPension" style="width:auto;margin:0"> Пенсионная скидка
+    </label>
+    <div class="calc" id="mCalc">Выберите услугу — посчитаем цену и длительность.</div>
+    <button id="manualSave">Сохранить запись</button>
+    <button class="close" id="manualClose">Отмена</button>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<!-- содержимое сайта: услуги, мастера, часы, скидка — чтобы админка не дублировала данные -->
+<script src="site-data.js?v=12"></script>
 <script>
-var PIPE_URL = 'https://script.google.com/macros/s/AKfycby5QU83WgqvnfSlclUlPVyXu9WLTAiYWflEfTrOjw3z1l-dWXKvCu-RzSDSm5oH9peO-w/exec';
-var TOKEN = localStorage.getItem('adminToken') || '';
+(function () {
+  'use strict';
 
-window.onload = function() {
-  console.log('PIPE_URL:', PIPE_URL);
-  if (TOKEN) {
-    document.getElementById('tokenInput').value = TOKEN;
-    login();
+  /* ================== НАСТРОЙКИ АДМИНКИ ================== */
+  var PIPE_URL = (window.SETTINGS && SETTINGS.pipeUrl) ||
+    'https://script.google.com/macros/s/AKfycby5QU83WgqvnfSlclUlPVyXu9WLTAiYWflEfTrOjw3z1l-dWXKvCu-RzSDSm5oH9peO-w/exec';
+  var SITE_URL = 'https://venera0207.github.io/eclat-studio/';
+  var TIMEOUT = 20000;          /* Apps Script может «просыпаться» несколько секунд */
+  var TOKEN = '';
+
+  /* ================== УТИЛИТЫ ================== */
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
-  document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
-};
-
-function login() {
-  TOKEN = document.getElementById('tokenInput').value.trim();
-  if (!TOKEN) {
-    alert('Введите токен');
-    return;
+  function toast(msg, kind) {
+    var box = $('toasts'), el = document.createElement('div');
+    el.className = 'toast' + (kind ? ' ' + kind : '');
+    el.innerHTML = msg;
+    box.appendChild(el);
+    setTimeout(function () { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 4200);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 4600);
   }
-  localStorage.setItem('adminToken', TOKEN);
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('dashboard').style.display = 'block';
-  loadStats();
-}
+  function dstr(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function shiftDays(dateS, n) { var d = new Date(dateS + 'T12:00:00'); d.setDate(d.getDate() + n); return dstr(d); }
+  function hm2m(s) { var p = String(s || '0:0').split(':'); return (+p[0] || 0) * 60 + (+p[1] || 0); }
+  function m2hm(m) {
+    m = Math.max(0, Math.round(+m || 0));
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  }
+  function money(n) { return Math.round(+n || 0).toLocaleString('ru-RU'); }
+  function weekdayRu(dateS) {
+    return ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][new Date(dateS + 'T12:00:00').getDay()];
+  }
 
-function logout() {
-  localStorage.removeItem('adminToken');
-  location.reload();
-}
-
-function loadStats() {
-  var url = PIPE_URL + '?action=getStats&token=' + TOKEN + '&cb=cb';
-  var script = document.createElement('script');
-  window.cb = function(data) {
-    if (data.ok) {
-      document.getElementById('statTotal').textContent = data.total;
-      document.getElementById('statToday').textContent = data.today;
-      document.getElementById('statCanceled').textContent = data.canceled;
+  /* ================== JSONP-КЛИЕНТ ТРУБЫ ==================
+     Уникальное имя колбэка на каждый запрос + таймаут + обработчик ошибки.
+     Раньше все запросы звали один и тот же window.cb: второй запрос затирал
+     первый, removeChild падал — и страница навсегда оставалась на «загружается». */
+  var reqSeq = 0;
+  function pipe(params, onOk, onFail) {
+    var name = 'eclatAdminCb' + (++reqSeq) + '_' + Date.now().toString(36);
+    var sc = document.createElement('script');
+    var done = false;
+    function cleanup() {
+      clearTimeout(timer);
+      try { delete window[name]; } catch (e) { window[name] = undefined; }
+      if (sc.parentNode) sc.parentNode.removeChild(sc);
     }
-    delete window.cb;
-    document.head.removeChild(script);
-  };
-  script.src = url;
-  document.head.appendChild(script);
-}
-
-function loadDay() {
-  var date = document.getElementById('dateInput').value;
-  if (!date) {
-    alert('Выберите дату');
-    return;
+    function fail(msg) { if (done) return; done = true; cleanup(); onFail && onFail(msg); }
+    var timer = setTimeout(function () { fail('timeout'); }, TIMEOUT);
+    window[name] = function (data) {
+      if (done) return; done = true; cleanup();
+      if (data && data.ok) onOk && onOk(data);
+      else onFail && onFail((data && (data.ru || data.error)) || 'Сервер вернул ошибку без описания.', data);
+    };
+    sc.onerror = function () { fail('network'); };
+    var qs = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    sc.src = PIPE_URL + (PIPE_URL.indexOf('?') >= 0 ? '&' : '?') + qs + '&cb=' + name;
+    document.head.appendChild(sc);
   }
-  var url = PIPE_URL + '?action=getDay&date=' + date + '&token=' + TOKEN + '&cb=cb';
-  var script = document.createElement('script');
-  window.cb = function(data) {
-    if (data.ok) {
-      renderDay(date, data.bookings, data.blocks);
-    } else {
-      alert('Ошибка: ' + data.error);
+  function ruError(code) {
+    if (code === 'timeout') return 'Труба не ответила за ' + Math.round(TIMEOUT / 1000) + ' с. Apps Script мог «заснуть» — нажмите ⟳ ещё раз.';
+    if (code === 'network') return 'Не удалось достучаться до трубы (сеть или CORS). Проверьте, что скрипт развернут как веб-приложение с доступом «все».';
+    return code || 'Неизвестная ошибка';
+  }
+
+  /* ================== ДАННЫЕ САЙТА (site-data.js) ================== */
+  var MASTERS = (window.MASTERS || []).filter(function (m) { return m.active !== false; });
+  var SERVICES = (window.SERVICES || []).filter(function (s) { return s.active !== false; });
+  var SITE = window.SITE || {};
+  var DISCOUNT = window.DISCOUNT || { enabled: false, percent: 0 };
+  function masterById(id) { return MASTERS.filter(function (m) { return m.id === id; })[0]; }
+  function svcById(id) { return SERVICES.filter(function (s) { return s.id === id; })[0]; }
+
+  /* ================== СТАТУС ТРУБЫ ================== */
+  function setStatus(kind, text) {
+    var bar = $('statusBar');
+    bar.className = 'status ' + kind;
+    $('statusText').innerHTML = text;
+  }
+  function checkPipe() {
+    setStatus('wait', 'Проверяем трубу…');
+    pipe({ action: 'test' }, function (d) {
+      var bits = ['Труба на связи', 'версия ' + (d.version || '?')];
+      if (d.services) bits.push('услуг: ' + d.services);
+      if (d.masters) bits.push('мастеров: ' + d.masters);
+      bits.push('записей всего: ' + (d.total || 0));
+      if (d.catalogOk === false) bits.push('⚠ каталог сайта не читается');
+      if (d.adminTokenSet === false) bits.push('⚠ в скрипте не задан ADMIN_TOKEN');
+      setStatus('ok', bits.join(' · '));
+    }, function (code) {
+      setStatus('bad', 'Труба не отвечает: ' + esc(ruError(code)));
+    });
+  }
+
+  /* ================== СТАТИСТИКА ================== */
+  function loadStats() {
+    pipe({ action: 'getStats', token: TOKEN }, function (d) {
+      $('statTotal').textContent = d.total || 0;
+      $('statToday').textContent = d.today || 0;
+      $('statCanceled').textContent = d.canceled || 0;
+      $('statRevenue').textContent = d.revenue != null ? money(d.revenue) : '—';
+    }, function (code, data) {
+      ['statTotal', 'statToday', 'statCanceled', 'statRevenue'].forEach(function (id) { $(id).textContent = '—'; });
+      if (data && data.error === 'bad token') return badToken();
+      toast('Статистика не загрузилась: ' + esc(ruError(code)), 'bad');
+    });
+  }
+
+  /* ================== ДЕНЬ ================== */
+  function loadDay() {
+    var date = $('dateInput').value;
+    if (!date) { toast('Выберите дату', 'bad'); return; }
+    var grid = $('dayGrid');
+    grid.innerHTML = '<div class="empty">Загружаем ' + date + '…</div>';
+    $('calendarTitle').textContent = 'Загружаем…';
+    pipe({ action: 'getDay', date: date, token: TOKEN }, function (d) {
+      renderDay(d.date || date, d.bookings || [], d.blocks || []);
+    }, function (code, data) {
+      if (data && data.error === 'bad token') return badToken();
+      grid.innerHTML = '<div class="empty">Не удалось загрузить день.<br>' + esc(ruError(code)) + '</div>';
+      $('calendarTitle').textContent = 'Ошибка загрузки';
+    });
+  }
+
+  function renderDay(date, bookings, blocks) {
+    $('calendarTitle').textContent = 'Записи на ' + date + ' (' + weekdayRu(date) + ')';
+    var grid = $('dayGrid');
+    grid.innerHTML = '';
+    if (!bookings.length && !blocks.length) {
+      grid.innerHTML = '<div class="empty">На этот день нет ни записей, ни блоков.<br>Свободно весь день 🎉</div>';
+      return;
     }
-    delete window.cb;
-    document.head.removeChild(script);
-  };
-  script.src = url;
-  document.head.appendChild(script);
-}
+    var items = [];
+    blocks.forEach(function (b) { items.push({ t: b.startMin || 0, kind: 'block', d: b }); });
+    bookings.forEach(function (b) { items.push({ t: b.startMin || 0, kind: 'book', d: b }); });
+    items.sort(function (a, b) { return a.t - b.t; });
 
-function renderDay(date, bookings, blocks) {
-  document.getElementById('calendarTitle').textContent = 'Записи на ' + date;
-  var grid = document.getElementById('dayGrid');
-  grid.innerHTML = '';
-  
-  if (bookings.length === 0 && blocks.length === 0) {
-    grid.innerHTML = '<div class="empty">На этот день нет записей и блоков</div>';
-    return;
+    items.forEach(function (it) {
+      var card = document.createElement('div');
+      if (it.kind === 'block') {
+        var bl = it.d;
+        card.className = 'booking-card block';
+        card.innerHTML =
+          '<div class="info"><div class="time">' + esc(bl.start) + ' – ' + esc(bl.end) +
+          '<span class="num">блок ' + esc(bl.id) + '</span></div>' +
+          '<div class="details">🚫 ' + esc(bl.master || 'Все мастера') + ' — ' + esc(bl.reason || 'блок') + '</div></div>' +
+          '<div class="actions"><button class="btn-unblock" data-unblock="' + esc(bl.id) + '">Убрать блок</button></div>';
+      } else {
+        var b = it.d, off = b.status === 'cancelled';
+        card.className = 'booking-card' + (off ? ' off' : '');
+        var price = b.discountPercent
+          ? '<span class="price">' + money(b.price) + ' ₽</span> <span class="small">(−' + b.discountPercent + '% от ' + money(b.priceBase) + ')</span>'
+          : '<span class="price">' + money(b.price) + ' ₽</span>';
+        card.innerHTML =
+          '<div class="info"><div class="time">' + esc(b.start) + ' – ' + esc(b.end) +
+          '<span class="num">' + esc(b.id) + (off ? ' · отменена' : '') + '</span></div>' +
+          '<div class="details">' + esc(b.master) + ' · ' + esc(b.service) + '<br>' +
+          esc(b.name) + ' · <a href="tel:' + esc(String(b.phone).replace(/[^\d+]/g, '')) + '">' + esc(b.phone) + '</a>' +
+          (b.comment ? '<br>💬 ' + esc(b.comment) : '') + '<br>' + price +
+          ' <span class="small">· ' + esc(b.source || 'сайт') + '</span></div></div>' +
+          (off ? '' : '<div class="actions"><button class="btn-cancel" data-cancel="' + esc(b.id) + '">Отменить</button></div>');
+      }
+      grid.appendChild(card);
+    });
   }
-  
-  blocks.forEach(function(b) {
-    var card = document.createElement('div');
-    card.className = 'booking-card';
-    card.style.borderLeftColor = '#ffaa00';
-    card.innerHTML = '<div class="info"><div class="time">' + b.start + ' – ' + b.end + '</div><div class="details">Блок: ' + b.master + ' — ' + b.reason + '</div></div>';
-    grid.appendChild(card);
+
+  /* ================== ОТМЕНА / БЛОКИ ================== */
+  function cancelBooking(id) {
+    if (!confirm('Отменить запись ' + id + '?\nОна останется в истории со статусом «отменена», время освободится.')) return;
+    pipe({ action: 'cancel', id: id, token: TOKEN }, function () {
+      toast('Запись ' + esc(id) + ' отменена', 'ok');
+      refreshAll();
+    }, function (code, data) {
+      if (data && data.error === 'bad token') return badToken();
+      toast('Не отменили: ' + esc(ruError(code)), 'bad');
+    });
+  }
+  function unblock(id) {
+    if (!confirm('Убрать блок ' + id + '?')) return;
+    pipe({ action: 'unblock', id: id, token: TOKEN }, function () {
+      toast('Блок убран', 'ok'); loadDay();
+    }, function (code) { toast('Не убрали блок: ' + esc(ruError(code)), 'bad'); });
+  }
+  function addBlock() {
+    var date = $('blockDate').value, start = $('blockStart').value, end = $('blockEnd').value;
+    var master = $('blockMaster').value, reason = $('blockReason').value.trim();
+    var err = $('blockErr'); err.textContent = '';
+    if (!date || !start || !end) { err.textContent = 'Заполните дату, начало и конец.'; return; }
+    if (hm2m(end) <= hm2m(start)) { err.textContent = 'Конец блока должен быть позже начала.'; return; }
+    var btn = $('blockSave'); btn.disabled = true; btn.textContent = 'Сохраняем…';
+    pipe({ action: 'addBlock', date: date, start: start, end: end, master: master, reason: reason || 'Блок', token: TOKEN },
+      function (d) {
+        btn.disabled = false; btn.textContent = 'Добавить блок';
+        closeBlockModal();
+        toast('Блок добавлен: ' + esc(d.date) + ' ' + esc(d.start) + '–' + esc(d.end) + ', ' + esc(d.master), 'ok');
+        $('dateInput').value = d.date;
+        refreshAll();
+      },
+      function (code) {
+        btn.disabled = false; btn.textContent = 'Добавить блок';
+        err.textContent = ruError(code);
+      });
+  }
+
+  /* ================== ЗАПИСЬ ВРУЧНУЮ ================== */
+  function fillManualSelects() {
+    $('mService').innerHTML = SERVICES.map(function (s) {
+      return '<option value="' + esc(s.id) + '">' + esc(s.title) + ' — ' + money(s.price) + ' ₽, ' + s.minutes + ' мин</option>';
+    }).join('');
+    $('mMaster').innerHTML = MASTERS.map(function (m) {
+      return '<option value="' + esc(m.id) + '">' + esc(m.name) + ' — ' + esc(m.role || '') + '</option>';
+    }).join('');
+    /* браузер сам выбирает первую опцию; подстрахуемся, если значение пустое/не из списка */
+    if (!svcById($('mService').value) && SERVICES.length) $('mService').value = SERVICES[0].id;
+    if (!masterById($('mMaster').value) && MASTERS.length) $('mMaster').value = MASTERS[0].id;
+  }
+  function fillBlockSelects() {
+    $('blockMaster').innerHTML = '<option value="all">Все мастера</option>' + MASTERS.map(function (m) {
+      return '<option value="' + esc(m.id) + '">' + esc(m.name) + '</option>';
+    }).join('');
+    if (!$('blockMaster').value) $('blockMaster').value = 'all';
+  }
+  function recalcManual() {
+    var s = svcById($('mService').value);
+    var box = $('mCalc');
+    if (!s) { box.innerHTML = 'Выберите услугу.'; return; }
+    var pension = $('mPension').checked && DISCOUNT.enabled !== false && s.pension !== false;
+    var percent = pension ? (DISCOUNT.percent || 0) : 0;
+    var final = pension ? Math.round(s.price * (100 - percent) / 100) : s.price;
+    var m = masterById($('mMaster').value);
+    var canDo = !s.masters || !s.masters.length || (m && s.masters.indexOf(m.id) >= 0);
+    box.innerHTML = 'Длительность: <b style="font-size:14px">' + s.minutes + ' мин</b> · ' +
+      'Итого: <b>' + money(final) + ' ₽</b>' +
+      (pension ? ' <span class="small">(скидка ' + percent + '% от ' + money(s.price) + ' ₽)</span>' : '') +
+      (canDo ? '' : '<br><span style="color:#ffaa00">⚠ ' + esc(m ? m.name : 'мастер') + ' не выполняет эту услугу — сервер откажет.</span>');
+  }
+  function saveManual() {
+    var err = $('manualErr'); err.textContent = '';
+    var date = $('mDate').value, start = $('mStart').value;
+    var name = $('mName').value.trim(), phone = $('mPhone').value.trim();
+    if (!date) { err.textContent = 'Выберите дату.'; return; }
+    if (!start) { err.textContent = 'Выберите время.'; return; }
+    if (name.length < 2) { err.textContent = 'Укажите имя клиента.'; return; }
+    if (phone.replace(/\D/g, '').length < 10) { err.textContent = 'Укажите телефон полностью.'; return; }
+    var s = svcById($('mService').value);
+    var payload = {
+      serviceId: s ? s.id : '', masterId: $('mMaster').value, date: date,
+      startMin: hm2m(start), name: name, phone: phone,
+      comment: $('mComment').value.trim(), pension: $('mPension').checked, source: 'админ'
+    };
+    var btn = $('manualSave'); btn.disabled = true; btn.textContent = 'Сохраняем…';
+    pipe({ action: 'manualBook', token: TOKEN, data: JSON.stringify(payload) }, function (d) {
+      btn.disabled = false; btn.textContent = 'Сохранить запись';
+      closeManualModal();
+      toast('Запись ' + esc(d.id) + ' создана: ' + esc(date) + ' ' + m2hm(payload.startMin) + ', ' + esc(name), 'ok');
+      $('dateInput').value = date;
+      refreshAll();
+    }, function (code) {
+      btn.disabled = false; btn.textContent = 'Сохранить запись';
+      err.textContent = ruError(code);
+    });
+  }
+
+  /* ================== ТОКЕН / ВХОД ================== */
+  function badToken() {
+    localStorage.removeItem('adminToken');
+    TOKEN = '';
+    $('dashboard').style.display = 'none';
+    $('loginScreen').style.display = 'flex';
+    $('loginErr').textContent = 'Токен не подошёл. Проверьте ADMIN_TOKEN в скрипте записи (backend/appsscript.gs).';
+    $('tokenInput').value = '';
+    $('tokenInput').focus();
+  }
+  function login() {
+    var val = $('tokenInput').value.trim();
+    $('loginErr').textContent = '';
+    if (!val) { $('loginErr').textContent = 'Введите токен.'; return; }
+    if (/ВСТАВЬТЕ/i.test(val)) { $('loginErr').textContent = 'Это плейсхолдер. Задайте свой токен в скрипте.'; return; }
+    var btn = $('loginBtn'); btn.disabled = true; btn.textContent = 'Проверяем…';
+    /* проверяем токен реальным запросом, а не «на глаз» */
+    pipe({ action: 'getStats', token: val }, function () {
+      TOKEN = val;
+      localStorage.setItem('adminToken', val);
+      btn.disabled = false; btn.textContent = 'Войти';
+      enter();
+    }, function (code, data) {
+      btn.disabled = false; btn.textContent = 'Войти';
+      if (data && data.error === 'bad token') $('loginErr').textContent = 'Токен неверный.';
+      else $('loginErr').textContent = 'Не получилось проверить токен: ' + ruError(code);
+    });
+  }
+  function enter() {
+    $('loginScreen').style.display = 'none';
+    $('dashboard').style.display = 'block';
+    $('dateInput').value = dstr(new Date());
+    fillBlockSelects(); fillManualSelects();
+    $('mDate').value = dstr(new Date());
+    recalcManual();
+    refreshAll();
+  }
+  function refreshAll() { checkPipe(); loadStats(); loadDay(); }
+
+  /* ================== МОДАЛКИ ================== */
+  function openBlockModal() {
+    $('blockDate').value = $('dateInput').value || dstr(new Date());
+    $('blockStart').value = '13:00'; $('blockEnd').value = '14:00';
+    $('blockReason').value = ''; $('blockErr').textContent = '';
+    $('blockModal').style.display = 'flex';
+  }
+  function closeBlockModal() { $('blockModal').style.display = 'none'; }
+  function openManualModal() {
+    $('mDate').value = $('dateInput').value || dstr(new Date());
+    $('mStart').value = '12:00'; $('mName').value = ''; $('mPhone').value = '+7 ';
+    $('mComment').value = ''; $('mPension').checked = false; $('manualErr').textContent = '';
+    recalcManual();
+    $('manualModal').style.display = 'flex';
+  }
+  function closeManualModal() { $('manualModal').style.display = 'none'; }
+
+  /* ================== СОБЫТИЯ ================== */
+  $('loginBtn').addEventListener('click', login);
+  $('tokenInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') login(); });
+  $('btnLogout').addEventListener('click', function () {
+    localStorage.removeItem('adminToken'); location.reload();
   });
-  
-  bookings.forEach(function(b) {
-    var card = document.createElement('div');
-    card.className = 'booking-card';
-    card.innerHTML = '<div class="info"><div class="time">' + b.start + ' – ' + b.end + '</div><div class="details">' + b.master + ' · ' + b.service + '<br>' + b.name + ' · <a href="tel:' + b.phone + '">' + b.phone + '</a></div></div><div class="actions"><button class="btn-cancel" onclick="cancelBooking(\'' + b.id + '\')">Отменить</button></div>';
-    grid.appendChild(card);
+  $('btnSite').addEventListener('click', function () { window.open(SITE_URL, '_blank'); });
+  $('btnRefresh').addEventListener('click', refreshAll);
+  $('btnToday').addEventListener('click', function () { $('dateInput').value = dstr(new Date()); loadDay(); });
+  $('btnPrev').addEventListener('click', function () { $('dateInput').value = shiftDays($('dateInput').value, -1); loadDay(); });
+  $('btnNext').addEventListener('click', function () { $('dateInput').value = shiftDays($('dateInput').value, 1); loadDay(); });
+  $('dateInput').addEventListener('change', loadDay);
+  $('btnBlock').addEventListener('click', openBlockModal);
+  $('blockSave').addEventListener('click', addBlock);
+  $('blockClose').addEventListener('click', closeBlockModal);
+  $('btnManual').addEventListener('click', openManualModal);
+  $('manualSave').addEventListener('click', saveManual);
+  $('manualClose').addEventListener('click', closeManualModal);
+  $('mService').addEventListener('change', recalcManual);
+  $('mMaster').addEventListener('change', recalcManual);
+  $('mPension').addEventListener('change', recalcManual);
+  [$('blockModal'), $('manualModal')].forEach(function (m) {
+    m.addEventListener('click', function (e) { if (e.target === m) m.style.display = 'none'; });
   });
-}
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { closeBlockModal(); closeManualModal(); }
+  });
+  /* делегирование: кнопки «Отменить» и «Убрать блок» создаются динамически */
+  $('dayGrid').addEventListener('click', function (e) {
+    var c = e.target.closest('[data-cancel]');
+    if (c) return cancelBooking(c.getAttribute('data-cancel'));
+    var u = e.target.closest('[data-unblock]');
+    if (u) return unblock(u.getAttribute('data-unblock'));
+  });
 
-function cancelBooking(id) {
-  if (!confirm('Отменить запись ' + id + '?')) return;
-  var url = PIPE_URL + '?action=cancel&id=' + id + '&token=' + TOKEN + '&cb=cb';
-  var script = document.createElement('script');
-  window.cb = function(data) {
-    if (data.ok) {
-      alert('Запись отменена');
-      loadDay();
-      loadStats();
-    } else {
-      alert('Ошибка: ' + data.error);
-    }
-    delete window.cb;
-    document.head.removeChild(script);
-  };
-  script.src = url;
-  document.head.appendChild(script);
-}
-
-function showBlockModal() {
-  document.getElementById('blockDate').value = document.getElementById('dateInput').value;
-  document.getElementById('blockModal').style.display = 'flex';
-}
-
-function closeBlockModal() {
-  document.getElementById('blockModal').style.display = 'none';
-}
-
-function addBlock() {
-  var date = document.getElementById('blockDate').value;
-  var start = document.getElementById('blockStart').value;
-  var end = document.getElementById('blockEnd').value;
-  var master = document.getElementById('blockMaster').value;
-  var reason = document.getElementById('blockReason').value;
-  
-  if (!date || !start || !end) {
-    alert('Заполните дату и время');
-    return;
-  }
-  
-  var url = PIPE_URL + '?action=addBlock&date=' + date + '&start=' + start + '&end=' + end + '&master=' + master + '&reason=' + reason + '&token=' + TOKEN + '&cb=cb';
-  var script = document.createElement('script');
-  window.cb = function(data) {
-    if (data.ok) {
-      alert('Блок добавлен');
-      closeBlockModal();
-      loadDay();
-    } else {
-      alert('Ошибка: ' + data.error);
-    }
-    delete window.cb;
-    document.head.removeChild(script);
-  };
-  script.src = url;
-  document.head.appendChild(script);
-}
+  /* ================== СТАРТ ================== */
+  $('loginPipe').textContent = PIPE_URL ? 'Труба: …' + PIPE_URL.slice(-24) : 'Труба не указана в site-data.js';
+  /* на экране входа сразу проверяем, жива ли труба — видно до ввода токена */
+  pipe({ action: 'test' }, function (d) {
+    $('loginPipe').innerHTML = '✅ Труба жива · услуг: ' + (d.services || 0) + ' · мастеров: ' + (d.masters || 0) +
+      (d.adminTokenSet === false ? '<br><span style="color:#ffaa00">⚠ ADMIN_TOKEN в скрипте не задан</span>' : '');
+  }, function (code) {
+    $('loginPipe').innerHTML = '<span style="color:#ff6b6b">⚠ Труба не отвечает: ' + esc(ruError(code)) + '</span>';
+  });
+  var saved = localStorage.getItem('adminToken') || '';
+  if (saved) { $('tokenInput').value = saved; login(); }
+})();
 </script>
 
 </body>
