@@ -167,8 +167,9 @@ t('с токеном бота заявка дополнительно уходи
   const tgBefore = TG_SENT.length;
   const r = call({ action: 'lead', name: 'Бот Тест', contact: '+7 900 111-22-33', message: 'диалог', source: 'eclat-assistant', sid: 's2' });
   assert.strictEqual(r.telegram, true);
-  assert.ok(TG_SENT.length > tgBefore);
-  assert.ok(/новая заявка/.test(TG_SENT[TG_SENT.length - 1].body));
+  assert.ok(TG_SENT.length >= tgBefore + 2, 'ожидали карточку + диалог, пришло: ' + (TG_SENT.length - tgBefore));
+  assert.ok(TG_SENT.some(m => /новая заявка/.test(m.body)), 'нет карточки заявки');
+  assert.ok(TG_SENT.some(m => /Диалог с клиентом/.test(m.body)), 'нет сообщения с диалогом');
 });
 t('с ключом Z.ai чат отвечает нейросетью (ai:true)', () => {
   global.ZAI_KEY = 'GOODKEY';

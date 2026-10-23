@@ -267,7 +267,7 @@
     var item = {
       name: name, contact: contact, source: 'eclat-assistant', sid: SID,
       message: 'Клиент оставил контакт в чате.\nИмя: ' + name + '\nКонтакт: ' + contact +
-               '\n\nВесь диалог:\n…' + transcript().slice(-500)
+               '\n\nВесь диалог:\n…' + transcript().slice(-2000)
     };
     if (!leadUrls().length) { lqPush(item); mailBackup(item); addMsg('bot', 'Спасибо! Заявка принята — салон свяжется с вами в рабочее время 💜'); return; }
     var attempt = 0;

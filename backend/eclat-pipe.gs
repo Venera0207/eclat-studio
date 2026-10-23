@@ -187,7 +187,9 @@ function doLead(p) {
 
   /* 2) Telegram владелице: суть + хвост диалога для контекста */
   tg = sendTelegram('💇 ÉCLAT, новая заявка!\nИмя: ' + name + '\nКонтакт: ' + contact +
-    '\nИсточник: ' + source + '\n\nКонтекст диалога:\n…' + message.slice(-700));
+    '\nИсточник: ' + source + '\nВремя: ' + stamp(new Date()));
+  /* следом — ВЕСЬ диалог отдельным сообщением, чтобы видеть контекст целиком */
+  if (tg && message) sendTelegram('💬 Диалог с клиентом ' + (name || '(без имени)') + ':\n' + message.slice(-3800));
 
   /* 3) письмо-дублёр, если Telegram молчит */
   try {
@@ -374,3 +376,4 @@ function hasZai()  { return !!ZAI_KEY && ZAI_KEY.indexOf('ВСТАВЬ') < 0; }
 function hasBot()  { return !!BOT_TOKEN && BOT_TOKEN.indexOf('ВСТАВЬ') < 0; }
 function hasChat() { return !!CHAT_ID && CHAT_ID.indexOf('ВСТАВЬ') < 0; }
 function iso(d) { return d.toISOString ? d.toISOString() : String(d); }
+function stamp(d) { return Utilities.formatDate(d, TZ, 'dd.MM.yyyy HH:mm:ss'); }
