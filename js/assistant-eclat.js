@@ -235,7 +235,9 @@
       jsonp(PIPE, { action: 'lead', name: item.name, contact: item.contact, message: item.message, source: item.source, sid: item.sid },
         function () { addMsg('bot', 'Заявка принята! Салон скоро свяжется с вами 💜'); flushLeads(); },
         function () {
-          if (attempt === 0) { attempt = 1; setTimeout(go, 2000); return; }
+          attempt++;
+          if (attempt === 1) { setTimeout(go, 2500); return; }
+          if (attempt === 2) { setTimeout(go, 9000); return; }
           lqPush(item); mailBackup(item);
           addMsg('bot', 'Заявка принята! Салон свяжется с вами в рабочее время 💜');
         });
@@ -245,10 +247,20 @@
   window.addEventListener('load', function () { setTimeout(flushLeads, 3000); });
   setInterval(flushLeads, 60000);
 
-  /* весь диалог — в лист «Диалоги»: одна строка на разговор, дообновляется по ходу */
+  /* весь диалог — в лист «Диалоги»: одна строка на разговор.
+     Замер показал: Google шлёпает 400, когда запросы идут пачкой,
+     поэтому журнал уходит с задержкой 6 секунд и не чаще раза на разговор
+     (при ошибке пробуем ещё раз при следующем событии). */
+  var logSent = false, logTimer = null, logOutcome = 'kb';
   function logDialog(outcomeNow) {
-    if (!PIPE || msgCount < 2) return;
-    jsonp(PIPE, { action: 'log', page: 'eclat-assistant', client: leadTaken ? 'lead' : '', bot: transcript(), outcome: outcomeNow, sid: SID }, function () {}, function () {});
+    logOutcome = outcomeNow || logOutcome;
+    if (!PIPE || msgCount < 2 || logSent) return;
+    logSent = true;
+    if (logTimer) clearTimeout(logTimer);
+    logTimer = setTimeout(function () {
+      jsonp(PIPE, { action: 'log', page: 'eclat-assistant', client: leadTaken ? 'lead' : '', bot: transcript(), outcome: logOutcome, sid: SID },
+        function () {}, function () { logSent = false; });
+    }, 6000);
   }
 
   /* ---------- диалог ---------- */
