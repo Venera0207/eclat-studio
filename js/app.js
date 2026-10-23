@@ -377,13 +377,23 @@
     W._p = p;
     var btn = $('#wiz-next'); btn.disabled = true; btn.textContent = 'Сохраняем…';
     if (SETTINGS.pipeUrl) {
-      jsonp(SETTINGS.pipeUrl, { action: 'book', data: JSON.stringify(p) }, function (d) {
-        if (d && d.ok) { absorbPipe(d.booking, p); finish(d.id, 'pipe', '', ''); }
-        else conflict(d && (d.reason === 'conflict' || d.ru) ? (d.ru || 'Это время только что заняли. Выберите другой интервал.') : (d && d.error));
-      }, function () {
-        /* труба недоступна: запасной путь — локально + резервное письмо */
-        localSave(p, 'Сервер записи недоступен — заявка сохранена локально и продублирована резервным письмом.');
-      }, 45000);
+      /* Google изредка отбивает запросы, пришедшие пачкой (чат в этот момент
+         тоже общается с трубой). Поэтому прежде чем падать в локальный
+         запасной путь, пробуем ещё дважды с паузами. */
+      var attempt = 0;
+      var tryBook = function () {
+        jsonp(SETTINGS.pipeUrl, { action: 'book', data: JSON.stringify(p) }, function (d) {
+          if (d && d.ok) { absorbPipe(d.booking, p); finish(d.id, 'pipe', '', ''); }
+          else conflict(d && (d.reason === 'conflict' || d.ru) ? (d.ru || 'Это время только что заняли. Выберите другой интервал.') : (d && d.error));
+        }, function () {
+          attempt++;
+          if (attempt === 1) { setTimeout(tryBook, 2500); return; }
+          if (attempt === 2) { setTimeout(tryBook, 9000); return; }
+          /* труба недоступна: запасной путь — локально + резервное письмо */
+          localSave(p, 'Сервер записи недоступен — заявка сохранена локально и продублирована резервным письмом.');
+        }, 45000);
+      };
+      tryBook();
     } else {
       setTimeout(function () { localSave(p, ''); }, 350);
     }
