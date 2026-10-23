@@ -66,6 +66,42 @@ var BOOK_TEXT_COLS  = [2, 3, 4, 5, 6, 7, 8, 9, 14];
 var BLOCK_TEXT_COLS = [2, 3, 4, 5, 6, 9, 10];
 var LOG_TEXT_COLS   = [1, 2, 3, 4];
 
+/* ---------- КРАСОТА ТАБЛИЦ: читаемо с первого взгляда ----------
+   ширины колонок, перенос длинного текста, точное время, закреплённая
+   и жирная шапка, удаление пустых колонок справа. Вызывается при каждой
+   записи и при открытии админки, чтобы таблица всегда была «по размеру». */
+function beautify(sh, widths, wrapCols, dateCols) {
+  try {
+    var i, rows = Math.max(sh.getLastRow() - 1, 1);
+    for (i = 0; i < widths.length; i++) sh.setColumnWidth(i + 1, widths[i]);
+    if (sh.getMaxColumns() > widths.length) sh.deleteColumns(widths.length + 1, sh.getMaxColumns() - widths.length);
+    for (i = 0; i < wrapCols.length; i++) sh.getRange(2, wrapCols[i], rows, 1).setWrap(true).setVerticalAlignment('top');
+    for (i = 0; i < dateCols.length; i++) sh.getRange(2, dateCols[i], rows, 1).setNumberFormat('dd.mm.yyyy hh:mm:ss');
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, widths.length).setFontWeight('bold');
+  } catch (e) {}
+}
+var BOOK_WIDTHS  = [95, 110, 70, 70, 95, 160, 115, 140, 170, 115, 80, 80, 95, 150, 85, 85, 95, 95, 95, 95];
+var BLOCK_WIDTHS = [115, 110, 70, 70, 85, 115, 95, 95, 220, 150];
+var LOG_WIDTHS_B = [150, 190, 115, 440];
+
+/* лист «Журнал» мог быть создан старой версией с чужой шапкой — чиним заголовки */
+function fixJournalHead(sh) {
+  try {
+    if (str(sh.getRange(1, 1).getValue()) === 'Когда') {
+      sh.getRange(1, 1, 1, LOG_HEAD.length).setValues([LOG_HEAD]);
+    }
+  } catch (e) {}
+}
+function tidyAll() {
+  var b = ss().getSheetByName(BOOK_SHEET);
+  if (b) beautify(b, BOOK_WIDTHS, [6, 7, 9], []);
+  var k = ss().getSheetByName(BLOCK_SHEET);
+  if (k) beautify(k, BLOCK_WIDTHS, [9], []);
+  var j = ss().getSheetByName(LOG_SHEET);
+  if (j) { fixJournalHead(j); beautify(j, LOG_WIDTHS_B, [4], []); }
+}
+
 /* ============================== HTTP ============================== */
 function doGet(e) {
   var p = (e && e.parameter) || {};
@@ -89,9 +125,10 @@ function doGet(e) {
       case 'unblock':    out = guard(p, function () { return doUnblock(p); }); break;
       case 'manualBook': out = guard(p, function () { return doBook(p, true); }); break;
       case 'reload':     out = guard(p, function () { cache().remove(CATALOG_CACHE); return { ok: true, message: 'Кеш каталога сброшен' }; }); break;
+      case 'tidy':       out = guard(p, function () { tidyAll(); return { ok: true, message: 'Таблицы приведены в порядок' }; }); break;
 
       default: out = { ok: false, error: 'Unknown action: ' + action,
-                       hint: 'Доступные: ping, test, busy, book, getStats, getDay, list, cancel, addBlock, unblock, manualBook, reload' };
+                       hint: 'Доступные: ping, test, busy, book, getStats, getDay, list, cancel, addBlock, unblock, manualBook, reload, tidy' };
     }
   } catch (err) {
     out = { ok: false, error: String(err && err.message || err) };
@@ -230,7 +267,9 @@ function rows(s) {
 function logIt(event, id, extra) {
   try {
     var s = sheetNamed(LOG_SHEET, LOG_HEAD);
+    fixJournalHead(s);
     appendRowText(s, [stamp(new Date()), event, id || '', extra || ''], LOG_TEXT_COLS);
+    beautify(s, LOG_WIDTHS_B, [4], []);
   } catch (e) {}
 }
 
@@ -303,6 +342,7 @@ function doBusy(p) {
 }
 
 function doStats() {
+  tidyAll();
   var data = rows(bookSheet()), today = todayStr();
   var total = 0, todayCount = 0, canceled = 0, sum = 0;
   data.forEach(function (r) {
@@ -314,6 +354,7 @@ function doStats() {
 }
 
 function doGetDay(p) {
+  tidyAll();
   var date = ds(p.date) || todayStr();
   return { ok: true, date: date, bookings: dayBookings(date), blocks: dayBlocks(date) };
 }
@@ -361,6 +402,7 @@ function doAddBlock(p) {
   var s = blockSheet();
   var id = 'BLK-' + fmt(new Date(), 'MMdd-HHmmss');
   appendRowText(s, [id, date, hm(startMin), hm(endMin), masterId, masterName, startMin, endMin, str(p.reason || 'Блок'), stamp(new Date())], BLOCK_TEXT_COLS);
+  beautify(s, BLOCK_WIDTHS, [9], []);
   logIt('добавлен блок', id, date + ' ' + hm(startMin) + '–' + hm(endMin) + ' ' + masterName);
   return { ok: true, id: id, date: date, startMin: startMin, endMin: endMin, masterId: masterId, master: masterName };
 }
@@ -425,6 +467,7 @@ function doBook(p, isManual) {
     appendRowText(s, [rec.id, rec.date, rec.start, rec.end, rec.master, rec.service, rec.name, rec.phone,
                  rec.comment, rec.statusRu, rec.price, rec.discountPercent, rec.source, rec.created,
                  rec.masterId, rec.serviceId, rec.startMin, rec.endMin, rec.priceBase, rec.pension ? 'да' : 'нет'], BOOK_TEXT_COLS);
+    beautify(s, BOOK_WIDTHS, [6, 7, 9], []);
 
     /* письмо — после сохранения: сбой почты не должен терять запись */
     var mailOk = true, mailErr = '';

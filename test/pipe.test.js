@@ -15,7 +15,11 @@ function sheetsParse(v) {
   return v;
 }
 class Sheet {
-  constructor(name) { this.name = name; this.v = []; this.fmt = {}; }
+  constructor(name) { this.name = name; this.v = []; this.fmt = {}; this.widths = {}; this.maxCols = 26; }
+  setColumnWidth(c, w) { this.widths[c] = w; return this; }
+  deleteColumns(start, n) { this.maxCols = Math.min(this.maxCols, start - 1); return this; }
+  getMaxColumns() { return this.maxCols; }
+  setFrozenRows(n) { this.frozen = n; return this; }
   getName() { return this.name; }
   getLastRow() { return this.v.length; }
   getLastColumn() { return this.v.reduce((m, r) => Math.max(m, r.length), 0); }
@@ -36,6 +40,7 @@ class Sheet {
         }
         return out;
       },
+      getValue: () => { const row = s.v[r - 1] || []; return row[c - 1] !== undefined ? row[c - 1] : ''; },
       setValue: (val) => {
         for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) {
           const row = s.v[r - 1 + i]; if (!row) continue;
@@ -47,6 +52,13 @@ class Sheet {
       // как в настоящих Apps Script: возвращает сам Range, чтобы можно было писать цепочкой
       setNumberFormat: (f) => {
         for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.fmt[(r + i) + ':' + (c + j)] = f;
+        return range;
+      },
+      setWrap: () => range,
+      setVerticalAlignment: () => range,
+      setFontWeight: () => range,
+      setValues: (rows2d) => {
+        for (let i = 0; i < nr; i++) { const row = s.v[r - 1 + i]; if (row) for (let j = 0; j < nc; j++) row[c - 1 + j] = rows2d[i][j]; }
         return range;
       }
     };
@@ -459,6 +471,23 @@ t('lead: заявка из чата ложится в лист «Заявки и
 t('lead публичный (без токена) — окошко сайта не хранит токен', () => {
   const r = call({ action: 'lead', name: 'Без Токена', contact: '79001112233', message: 'x', source: 'чат' });
   assert.strictEqual(r.ok, true);
+});
+
+/* ---------- 8d. приборка таблиц (пустые столбцы и обрезанный текст) ---------- */
+t('tidyAll: чужая шапка журнала «Когда/Кому» ремонтируется на правильную', () => {
+  const j = DB.getSheetByName('Журнал');
+  j.v[0] = ['Когда', 'Событие', 'Кому', 'Тема', 'Статус', 'Ошибка'];
+  global.tidyAll();
+  assert.deepStrictEqual(j.v[0].slice(0, 4), ['Время', 'Событие', 'ID записи', 'Подробности']);
+  assert.strictEqual(j.maxCols, 4, 'пустые колонки журнала не удалены: ' + j.maxCols);
+});
+t('tidyAll: лист «Записи» по размеру, шапка закреплена, услуга широкая', () => {
+  const b = DB.getSheetByName('Записи');
+  global.tidyAll();
+  assert.strictEqual(b.maxCols, 20, 'колонок: ' + b.maxCols);
+  assert.strictEqual(b.frozen, 1, 'шапка не закреплена');
+  assert.strictEqual(b.widths[6], 160, 'ширина услуги: ' + b.widths[6]);
+  assert.strictEqual(b.widths[8], 140, 'ширина телефона: ' + b.widths[8]);
 });
 
 /* ---------- 9. журнал ---------- */
