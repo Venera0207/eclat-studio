@@ -189,6 +189,8 @@
     leadTaken = true;
     sendLead(name, contact);
     logDialog('lead');
+    /* заявка закрыта: следующие сообщения — это обычные вопросы, не продолжение заявки */
+    leadTaken = false; savedPhone = ''; leadName = '';
   }
   /* ---------- НАДЁЖНАЯ ДОСТАВКА ЗАЯВОК ----------
      Замеры показали: Google Apps Script изредка отвечает 400/таймаутом
@@ -290,15 +292,32 @@
      поэтому журнал уходит с задержкой 6 секунд и не чаще раза на разговор
      (при ошибке пробуем ещё раз при следующем событии). */
   var logSent = false, logTimer = null, logOutcome = 'kb';
+  function logPayload(outcomeNow) {
+    return { action: 'log', page: 'eclat-assistant', client: leadTaken ? 'lead' : '', bot: transcript(), outcome: outcomeNow, sid: SID };
+  }
+  function postLog(payload) {
+    try {
+      fetch(PIPE, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify(payload) }).catch(function () {});
+    } catch (e) {}
+  }
   function logDialog(outcomeNow) {
     logOutcome = outcomeNow || logOutcome;
     if (!PIPE || msgCount < 2 || logSent) return;
     logSent = true;
     if (logTimer) clearTimeout(logTimer);
     logTimer = setTimeout(function () {
-      jsonp(PIPE, { action: 'log', page: 'eclat-assistant', client: leadTaken ? 'lead' : '', bot: transcript(), outcome: logOutcome, sid: SID },
-        function () {}, function () { logSent = false; });
+      var payload = logPayload(logOutcome);
+      jsonp(PIPE, payload, function (d) { if (!(d && d.ok)) postLog(payload); }, function () { postLog(payload); });
     }, 6000);
+  }
+  /* закрывает вкладку — журнал всё равно долетает через sendBeacon */
+  function beaconLog() {
+    if (!PIPE || msgCount < 2 || logSent) return;
+    logSent = true;
+    try {
+      navigator.sendBeacon(PIPE, new Blob([JSON.stringify(logPayload(logOutcome))], { type: 'text/plain' }));
+    } catch (e) {}
   }
 
   /* ---------- диалог ---------- */
@@ -390,4 +409,5 @@
   });
   window.addEventListener('beforeunload', function () { logDialog(outcome); });
   document.addEventListener('visibilitychange', function () { if (document.hidden) logDialog(outcome); });
+  window.addEventListener('pagehide', beaconLog);
 })();
