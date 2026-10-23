@@ -199,18 +199,37 @@
           фоном (при загрузке страницы и раз в минуту), пока труба не примет.
      Клиент сразу видит «заявка принята», потому что заявка ДЕЙСТВИТЕЛЬНО
      принята: она не потеряется даже при сброившей трубе.                */
+  /* Заявки шлём в ДВЕ трубы: ассистента и стабильную трубу записей.
+     Если одна мигнёт (Google изредка отдаёт 400 пачкам GET), вторая примет. */
+  var BOOK_PIPE = (window.SETTINGS && SETTINGS.pipeUrl) ? SETTINGS.pipeUrl : '';
+  function leadUrls() {
+    var u = [];
+    if (PIPE) u.push(PIPE);
+    if (BOOK_PIPE && BOOK_PIPE !== PIPE) u.push(BOOK_PIPE);
+    return u;
+  }
+  function leadParams(item) {
+    return { action: 'lead', name: item.name, contact: item.contact, message: item.message, source: item.source, sid: item.sid };
+  }
+  function attemptLead(item, onOk, onFail) {
+    var urls = leadUrls(), i = 0;
+    function next() {
+      if (i >= urls.length) { onFail && onFail(); return; }
+      jsonp(urls[i++], leadParams(item), function () { onOk && onOk(); }, function () { next(); });
+    }
+    next();
+  }
   var LQ_KEY = 'eclat_lead_queue';
   function lqGet() { try { return JSON.parse(localStorage.getItem(LQ_KEY)) || []; } catch (e) { return []; } }
   function lqSet(v) { try { localStorage.setItem(LQ_KEY, JSON.stringify(v)); } catch (e) {} }
   function lqPush(item) { var q = lqGet(); q.push(item); lqSet(q); }
   var flushing = false;
   function flushLeads() {
-    if (flushing || !PIPE) return;
+    if (flushing) return;
     var q = lqGet();
-    if (!q.length) return;
+    if (!q.length || !leadUrls().length) return;
     flushing = true;
-    var item = q[0];
-    jsonp(PIPE, { action: 'lead', name: item.name, contact: item.contact, message: item.message, source: item.source, sid: item.sid },
+    attemptLead(q[0],
       function () { q.shift(); lqSet(q); flushing = false; flushLeads(); },
       function () { flushing = false; });
   }
@@ -229,10 +248,10 @@
       message: 'Клиент оставил контакт в чате.\nИмя: ' + name + '\nКонтакт: ' + contact +
                '\n\nВесь диалог:\n…' + transcript().slice(-500)
     };
-    if (!PIPE) { lqPush(item); mailBackup(item); addMsg('bot', 'Спасибо! Заявка принята — салон свяжется с вами в рабочее время 💜'); return; }
+    if (!leadUrls().length) { lqPush(item); mailBackup(item); addMsg('bot', 'Спасибо! Заявка принята — салон свяжется с вами в рабочее время 💜'); return; }
     var attempt = 0;
     function go() {
-      jsonp(PIPE, { action: 'lead', name: item.name, contact: item.contact, message: item.message, source: item.source, sid: item.sid },
+      attemptLead(item,
         function () { addMsg('bot', 'Заявка принята! Салон скоро свяжется с вами 💜'); flushLeads(); },
         function () {
           attempt++;

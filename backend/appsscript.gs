@@ -37,6 +37,7 @@ var OWNER_EMAIL = 'venera.web.4@gmail.com';
 var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';   // придумайте случайную строку; её же вы вводите в админке
 var SITE_DATA_URL = 'https://venera0207.github.io/eclat-studio/site-data.js';
 var TZ = 'Europe/Moscow';                  // часовой пояс салона (важно для «сегодня» и «время уже прошло»)
+var SITE_URL_HINT = 'https://venera0207.github.io/eclat-studio/';
 
 var BOOK_SHEET = 'Записи';
 var BLOCK_SHEET = 'Блоки';
@@ -45,6 +46,10 @@ var CATALOG_CACHE = 'eclat_catalog_v2';
 var CATALOG_TTL = 300;                     // секунд
 
 /* Заголовки листов. Порядок НЕ менять: на него завязаны индексы колонок. */
+var CHATLEAD_SHEET = 'Заявки из чата';
+var CHATLEAD_HEAD = ['Дата', 'Имя', 'Контакт', 'Диалог', 'Источник'];
+var CHATLEAD_TEXT_COLS = [2, 3, 4, 5];
+
 var BOOK_HEAD = ['Номер', 'Дата', 'Начало', 'Конец', 'Мастер', 'Услуга', 'Имя', 'Телефон',
                  'Комментарий', 'Статус', 'Цена', 'Скидка', 'Источник', 'Создана',
                  'МастерID', 'УслугаID', 'НачалоМин', 'КонецМин', 'ЦенаБаза', 'Пенсионер'];
@@ -73,6 +78,7 @@ function doGet(e) {
       case 'test':       out = doTest(); break;
       case 'busy':       out = doBusy(p); break;
       case 'book':       out = doBook(p, false); break;
+      case 'lead':       out = doChatLead(p); break;   /* заявки из чата-ассистента, публично */
 
       /* --- админ: нужен токен --- */
       case 'getStats':   out = guard(p, function () { return doStats(); }); break;
@@ -365,6 +371,30 @@ function doUnblock(p) {
     if (str(data[i][0]) === id) { s.deleteRow(i + 1); logIt('блок удалён', id); return { ok: true, id: id }; }
   }
   return { ok: false, error: 'not found', ru: 'Блок не найден.' };
+}
+
+/* ============ ЗАЯВКИ ИЗ ЧАТА: второй, стабильный канал ============
+   Окошко ассистента шлёт заявку сюда ПАРАЛЛЕЛЬНО с трубой ассистента:
+   даже если та мигнёт, заявка ляжет здесь, придёт письмом и не потеряется. */
+function doChatLead(p) {
+  var name = String(p.name || '').slice(0, 80);
+  var contact = String(p.contact || '').slice(0, 60);
+  var message = String(p.message || '').slice(0, 8000);
+  var source = String(p.source || 'чат');
+  var sheet = false, mail = false;
+  try {
+    appendRowText(sheetNamed(CHATLEAD_SHEET, CHATLEAD_HEAD),
+      [stamp(new Date()), name, contact, message, source], CHATLEAD_TEXT_COLS);
+    sheet = true;
+  } catch (e) {}
+  try {
+    MailApp.sendEmail(OWNER_EMAIL, 'ÉCLAT: заявка из чата — ' + (name || 'без имени'),
+      'Имя: ' + name + '\nКонтакт: ' + contact + '\nИсточник: ' + source +
+      '\n\nДиалог:\n…' + message.slice(-1500) + '\n\nСайт: ' + SITE_URL_HINT + '\n');
+    mail = true;
+  } catch (e) {}
+  if (!sheet && !mail) return { ok: false, error: 'lead not saved', ru: 'Не удалось сохранить заявку из чата.' };
+  return { ok: true, sheet: sheet, mail: mail, channel: 'bookings-pipe' };
 }
 
 /* ======================= ГЛАВНОЕ: ЗАПИСЬ ======================= */
