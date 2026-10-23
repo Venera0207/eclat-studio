@@ -211,11 +211,30 @@
   function leadParams(item) {
     return { action: 'lead', name: item.name, contact: item.contact, message: item.message, source: item.source, sid: item.sid };
   }
+  /* POST-доставка в трубу ассистента: не читается ответ (no-cors), но запрос
+     доходит; применяем ТОЛЬКО к трубе ассистента, у неё doPost умеет lead.
+     Для трубы записей используем только GET с проверяемым ответом, чтобы
+     никогда не считать доставленным то, что не доставлено. */
+  function postLead(url, item, onOk, onFail) {
+    try {
+      fetch(url, {
+        method: 'POST', mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: JSON.stringify(leadParams(item))
+      }).then(function () { onOk(); }, function () { onFail(); });
+    } catch (e) { onFail(); }
+  }
   function attemptLead(item, onOk, onFail) {
     var urls = leadUrls(), i = 0;
     function next() {
       if (i >= urls.length) { onFail && onFail(); return; }
-      jsonp(urls[i++], leadParams(item), function () { onOk && onOk(); }, function () { next(); });
+      var u = urls[i++];
+      jsonp(u, leadParams(item),
+        function (d) { if (d && d.ok) { onOk && onOk(); } else { next(); } },
+        function () {
+          if (u === PIPE) postLead(u, item, function () { onOk && onOk(); }, function () { next(); });
+          else next();
+        });
     }
     next();
   }
