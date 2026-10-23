@@ -100,7 +100,7 @@ function doPost(e) {
 
 function doTest() {
   var c = safeCatalog();
-  return { ok: true, version: 2, time: iso(new Date()),
+  return { ok: true, version: 2.1, pretty: true, time: iso(new Date()),
            zaiKeySet: hasZai(), botTokenSet: hasBot(), chatIdSet: hasChat(),
            catalogOk: !!c.ok, services: c.SERVICES.length, masters: c.MASTERS.length,
            siteDataUrl: SITE_DATA_URL };
