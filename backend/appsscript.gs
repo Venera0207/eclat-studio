@@ -115,6 +115,7 @@ function doGet(e) {
       case 'busy':       out = doBusy(p); break;
       case 'book':       out = doBook(p, false); break;
       case 'lead':       out = doChatLead(p); break;   /* заявки из чата-ассистента, публично */
+      case 'leadusl':    out = doServiceLead(p); break; /* заявки с лендинга услуги, публично */
 
       /* --- админ: нужен токен --- */
       case 'getStats':   out = guard(p, function () { return doStats(); }); break;
@@ -437,6 +438,44 @@ function doChatLead(p) {
   } catch (e) {}
   if (!sheet && !mail) return { ok: false, error: 'lead not saved', ru: 'Не удалось сохранить заявку из чата.' };
   return { ok: true, sheet: sheet, mail: mail, channel: 'bookings-pipe' };
+}
+
+/* ============ ЗАЯВКИ С ЛЕНДИНГА УСЛУГИ: своя таблица ============
+   Отдельная таблица «Венера — лиды услуги», чтобы заявки салонов-клиентов
+   не смешивались с записями салона ÉCLAT. Плюс письмо владелице.        */
+var USL_SHEET = 'Лиды услуги';
+var USL_HEAD = ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус'];
+var USL_TEXT_COLS = [2, 3, 4, 5, 6, 7];
+function uslSS() {
+  var props = PropertiesService.getScriptProperties();
+  var id = props.getProperty('USL_DB_ID');
+  if (id) { try { return SpreadsheetApp.openById(id); } catch (e) {} }
+  var created = SpreadsheetApp.create('Венера — лиды услуги «сайты для салонов»');
+  props.setProperty('USL_DB_ID', created.getId());
+  return created;
+}
+function doServiceLead(p) {
+  var salon = String(p.salon || '').slice(0, 120);
+  var name = String(p.name || '').slice(0, 80);
+  var contact = String(p.contact || '').slice(0, 60);
+  var want = String(p.want || '').slice(0, 80);
+  var comment = String(p.comment || '').slice(0, 2000);
+  var sheet = false, mail = false;
+  try {
+    var sh = uslSS().getSheetByName(USL_SHEET);
+    if (!sh) { sh = uslSS().insertSheet(USL_SHEET); sh.appendRow(USL_HEAD); }
+    else if (sh.getLastRow() === 0) sh.appendRow(USL_HEAD);
+    appendRowText(sh, [stamp(new Date()), salon, name, contact, want, comment, 'новый'], USL_TEXT_COLS);
+    sheet = true;
+  } catch (e) {}
+  try {
+    MailApp.sendEmail(OWNER_EMAIL, 'Заявка на сайт для салона: ' + (salon || name || 'без названия'),
+      'Салон: ' + salon + '\nКонтактное лицо: ' + name + '\nКонтакт: ' + contact +
+      '\nИнтересует: ' + want + '\nКомментарий: ' + comment + '\n\nЛендинг: услуга «сайты для салонов»\n');
+    mail = true;
+  } catch (e) {}
+  if (!sheet && !mail) return { ok: false, error: 'lead not saved', ru: 'Не удалось сохранить заявку.' };
+  return { ok: true, sheet: sheet, mail: mail, channel: 'uslugi-landing' };
 }
 
 /* ======================= ГЛАВНОЕ: ЗАПИСЬ ======================= */
