@@ -490,6 +490,26 @@ t('tidyAll: лист «Записи» по размеру, шапка закре
   assert.strictEqual(b.widths[8], 140, 'ширина телефона: ' + b.widths[8]);
 });
 
+t('leadusl: заявка с лендинга услуги падает в отдельную таблицу и шлёт письмо', () => {
+  const before = SENT_MAIL.length;
+  const r = call({ action: 'leadusl', salon: 'Локон', name: 'Мария', contact: '+7 900 123-45-67', want: 'Всё вместе', comment: 'город СПб, 4 мастера' });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.sheet, true); assert.strictEqual(r.mail, true);
+  const sh = DB.getSheetByName('Лиды услуги');
+  assert.ok(sh, 'таблица лидов не создана');
+  const row = sh.v[1];
+  assert.strictEqual(row[1], 'Локон');
+  assert.strictEqual(row[3], '+7 900 123-45-67');
+  assert.strictEqual(row[4], 'Всё вместе');
+  assert.strictEqual(SENT_MAIL.length, before + 1);
+});
+t('leadusl не мешает записям салона: лист «Записи» не тронут', () => {
+  const b = DB.getSheetByName('Записи');
+  const n = b.v.length;
+  call({ action: 'leadusl', salon: 'X', name: 'Y', contact: '70000000000', want: 'Сайт-витрина', comment: '' });
+  assert.strictEqual(DB.getSheetByName('Записи').v.length, n);
+});
+
 /* ---------- 9. журнал ---------- */
 t('журнал пишет события', () => {
   const s = DB.getSheetByName('Журнал');
