@@ -387,15 +387,19 @@
   }
 
   /* ---------- события ---------- */
-  fab.addEventListener('click', function () {
-    var on = panel.classList.toggle('on');
+  function togglePanel(force) {
+    var on = (force === true) ? true : !panel.classList.contains('on');
+    panel.classList.toggle('on', on);
     fab.textContent = on ? '✕' : '💬';
     if (on && !msgs.children.length) {
       addMsg('bot', 'Здравствуйте! Я ассистент ÉCLAT STUDIO 💜\nЗнаю услуги и цены, подскажу свободные окна и запишу за минуту. С чего начнём?');
       setChips(['Записаться', 'Свободные окна завтра', 'Цены женских услуг', 'Часы и адрес']);
       inp.focus();
     }
-  });
+  }
+  fab.addEventListener('click', function () { togglePanel(); });
+  /* прямая ссылка на бота: адрес сайта с ?chat=1 открывает окошко сразу */
+  if (/[?&]chat=1/.test(location.search)) togglePanel(true);
   panel.querySelector('#ea-send').addEventListener('click', function () { send(inp.value); });
   inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(inp.value); });
   msgs.addEventListener('click', function (e) {
