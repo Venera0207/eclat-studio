@@ -1,7 +1,10 @@
 /* =====================================================================
    ÉCLAT STUDIO — сервер записи (Google Apps Script + Google Sheets)
    ---------------------------------------------------------------------
-   Версия 2.0 — переписана под РЕАЛЬНЫЙ контракт сайта.
+   Версия 2.3 — добавлен БОТ ЗАЯВОК (отдельный Telegram-бот для услуги
+   «сайты для салонов»): заявки с лендинга падают в свою таблицу, приходят
+   письмом и в Telegram; кнопка-меню бота открывает лендинг как МИНИ-АПП;
+   на /start бот отвечает сам (вебхук). Настройка — одна функция setupLeadBot.
 
    ЧТО БЫЛО СЛОМАНО (версия 1.0):
      1. Сайт шлёт  ?action=book&data={JSON}  — сервер читал p.date, p.start,
@@ -38,6 +41,19 @@ var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';   // придумай�
 var SITE_DATA_URL = 'https://venera0207.github.io/eclat-studio/site-data.js';
 var TZ = 'Europe/Moscow';                  // часовой пояс салона (важно для «сегодня» и «время уже прошло»)
 var SITE_URL_HINT = 'https://venera0207.github.io/eclat-studio/';
+
+/* ---- БОТ ЗАЯВОК (услуги «сайты для салонов») — ОТДЕЛЬНЫЙ бот, не салонный ----
+   1. В Telegram у @BotFather: /newbot → имя «Венера — заявки на сайты» → скопировать токен.
+   2. Написать этому боту любое сообщение (например «привет») — иначе он не знает ваш chat_id.
+   3. Вставить токен ниже, запустить функцию setupLeadBot (кнопка «Выполнить»).
+      Она сама найдёт chat_id, сделает мини-апп кнопку, команды и вебхук.
+   CHAT_ID можно не заполнять — setupLeadBot положит его в свойства скрипта.       */
+var LEAD_BOT_TOKEN = 'ВСТАВЬТЕ_ТОКЕН_БОТА_ЗАЯВОК';
+var LEAD_CHAT_ID   = '';                   // ваш числовой id; оставьте пустым — найдём сами
+var LEAD_MINIAPP_URL = 'https://venera0207.github.io/eclat-studio/uslugi/';
+var LEAD_BOT_TITLE = 'Сайты и боты для салонов красоты — Венера';
+var LEAD_PHONE_URL = 'https://wa.me/79278504416';
+var LEAD_PORTFOLIO_URL = 'https://venera0207.github.io/venera-portfolio/';
 
 var BOOK_SHEET = 'Записи';
 var BLOCK_SHEET = 'Блоки';
@@ -93,6 +109,16 @@ function fixJournalHead(sh) {
     }
   } catch (e) {}
 }
+/* Шапка обязана совпадать с HEAD: добавили колонку — старая таблица сама доучится. */
+function ensureHead(sh, head) {
+  try {
+    var cur = sh.getRange(1, 1, 1, head.length).getValues()[0] || [];
+    for (var i = 0; i < head.length; i++) {
+      if (str(cur[i]) !== head[i]) { sh.getRange(1, 1, 1, head.length).setValues([head]); return true; }
+    }
+  } catch (e) {}
+  return false;
+}
 function tidyAll() {
   var b = ss().getSheetByName(BOOK_SHEET);
   if (b) beautify(b, BOOK_WIDTHS, [6, 7, 9], []);
@@ -110,7 +136,8 @@ function doGet(e) {
   try {
     switch (action) {
       /* --- публичные: сайт --- */
-      case 'ping':       out = { ok: true, time: iso(new Date()), version: 2.2, tz: TZ }; break;
+      case 'ping':       out = { ok: true, time: iso(new Date()), version: 2.3, tz: TZ,
+                                 leadBot: hasLeadBot(), leadChat: !!leadChatId(), leadUsl: true }; break;
       case 'test':       out = doTest(); break;
       case 'busy':       out = doBusy(p); break;
       case 'book':       out = doBook(p, false); break;
@@ -141,9 +168,26 @@ function doGet(e) {
 function doPost(e) {
   var p = {};
   try { p = JSON.parse((e && e.postData && e.postData.contents) || '{}'); } catch (x) { p = {}; }
+  /* Telegram прислал обновление для бота заявок — отвечаем ему, записи не трогаем */
+  if (p && (p.update_id !== undefined || p.message || p.edited_message || p.callback_query)) {
+    return tgOut(leadBotWebhook(e, p));
+  }
   var q = (e && e.parameter) || {};
   for (var k in q) if (q.hasOwnProperty(k) && p[k] === undefined) p[k] = q[k];
   return doGet({ parameter: p });
+}
+function tgOut(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj || { ok: true }))
+    .setMimeType(ContentService.MimeType.JSON || ContentService.MimeType.JAVASCRIPT);
+}
+/* проверка, что обновление прислал именно Telegram (секрет живёт в адресе вебхука) */
+function leadBotWebhook(e, u) {
+  if (!hasLeadBot()) return { ok: false, error: 'bot token not set' };
+  var q = (e && e.parameter) || {};
+  var sec = '';
+  try { sec = String(leadProps().getProperty('LEAD_TG_SECRET') || ''); } catch (x) {}
+  if (sec && String(q.tg || '') !== sec) return { ok: false, error: 'bad secret' };
+  return leadBotReply(u);
 }
 
 function jsonpOut(out, cbName) {
@@ -320,8 +364,9 @@ function doTest() {
            services: c.SERVICES.length, masters: c.MASTERS.length,
            catalogOk: !!c.ok, pipeUrlOk: true,
            adminTokenSet: ADMIN_TOKEN !== 'ВСТАВЬТЕ_СВОЙ_ТОКЕН',
+           leadBotSet: hasLeadBot(), leadChatSet: !!leadChatId(),
            brokenRows: broken.length, brokenIds: broken.slice(0, 10),
-           time: iso(new Date()), version: 2.2 };
+           time: iso(new Date()), version: 2.3 };
 }
 
 /* занятые окна за период — то, что сайт просит перед открытием мастера записи */
@@ -444,8 +489,8 @@ function doChatLead(p) {
    Отдельная таблица «Венера — лиды услуги», чтобы заявки салонов-клиентов
    не смешивались с записями салона ÉCLAT. Плюс письмо владелице.        */
 var USL_SHEET = 'Лиды услуги';
-var USL_HEAD = ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус'];
-var USL_TEXT_COLS = [2, 3, 4, 5, 6, 7];
+var USL_HEAD = ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус', 'Источник'];
+var USL_TEXT_COLS = [2, 3, 4, 5, 6, 7, 8];
 function uslSS() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty('USL_DB_ID');
@@ -460,22 +505,214 @@ function doServiceLead(p) {
   var contact = String(p.contact || '').slice(0, 60);
   var want = String(p.want || '').slice(0, 80);
   var comment = String(p.comment || '').slice(0, 2000);
-  var sheet = false, mail = false;
+  var src = uslSource(p.src || p.source || '');
+  var sheet = false, mail = false, tg = false;
   try {
     var sh = uslSS().getSheetByName(USL_SHEET);
-    if (!sh) { sh = uslSS().insertSheet(USL_SHEET); sh.appendRow(USL_HEAD); }
-    else if (sh.getLastRow() === 0) sh.appendRow(USL_HEAD);
-    appendRowText(sh, [stamp(new Date()), salon, name, contact, want, comment, 'новый'], USL_TEXT_COLS);
+    if (!sh) { sh = uslSS().insertSheet(USL_SHEET); }
+    if (sh.getLastRow() === 0) sh.appendRow(USL_HEAD);
+    else ensureHead(sh, USL_HEAD);            /* добавили колонку «Источник» — шапку чиним сами */
+    appendRowText(sh, [stamp(new Date()), salon, name, contact, want, comment, 'новый', src], USL_TEXT_COLS);
     sheet = true;
   } catch (e) {}
+  try { tg = sendLeadTelegram(uslLeadText(salon, name, contact, want, comment, src)); } catch (e) {}
   try {
     MailApp.sendEmail(OWNER_EMAIL, 'Заявка на сайт для салона: ' + (salon || name || 'без названия'),
       'Салон: ' + salon + '\nКонтактное лицо: ' + name + '\nКонтакт: ' + contact +
-      '\nИнтересует: ' + want + '\nКомментарий: ' + comment + '\n\nЛендинг: услуга «сайты для салонов»\n');
+      '\nИнтересует: ' + want + '\nКомментарий: ' + comment +
+      '\nИсточник: ' + src + '\n\nЛендинг: услуга «сайты для салонов»\n');
     mail = true;
   } catch (e) {}
-  if (!sheet && !mail) return { ok: false, error: 'lead not saved', ru: 'Не удалось сохранить заявку.' };
-  return { ok: true, sheet: sheet, mail: mail, channel: 'uslugi-landing' };
+  if (!sheet && !mail && !tg) return { ok: false, error: 'lead not saved', ru: 'Не удалось сохранить заявку.' };
+  return { ok: true, sheet: sheet, mail: mail, tg: tg, channel: 'uslugi-landing', src: src };
+}
+/* откуда пришла заявка: обычный сайт или мини-апп внутри Telegram */
+function uslSource(s) {
+  s = String(s || '').toLowerCase();
+  if (s.indexOf('tg') === 0 || s.indexOf('telegr') >= 0 || s.indexOf('mini') >= 0 || s.indexOf('bot') >= 0) return 'мини-апп Telegram';
+  if (s.indexOf('bot-') === 0) return 'бот';
+  return 'лендинг';
+}
+function uslLeadText(salon, name, contact, want, comment, src) {
+  return '🌐 НОВАЯ ЗАЯВКА — сайт для салона\n' +
+    '━━━━━━━━━━━━━━━━\n' +
+    'Салон: ' + (salon || '—') + '\n' +
+    'Кто: ' + (name || '—') + '\n' +
+    'Контакт: ' + (contact || '—') + '\n' +
+    'Интересует: ' + (want || '—') + '\n' +
+    (comment ? 'Комментарий: ' + comment + '\n' : '') +
+    'Откуда: ' + src + '\n' +
+    'Когда: ' + stamp(new Date()) + '\n' +
+    '━━━━━━━━━━━━━━━━\n' +
+    'Ответить: ' + LEAD_PHONE_URL;
+}
+
+/* ======================= БОТ ЗАЯВОК (Telegram) =======================
+   Отдельный бот: присылает заявки с лендинга в Telegram, а кнопка-меню
+   открывает лендинг как МИНИ-АПП прямо внутри Telegram.                 */
+function hasLeadBot() { return !!LEAD_BOT_TOKEN && LEAD_BOT_TOKEN.indexOf('ВСТАВЬ') < 0; }
+function leadProps() { return PropertiesService.getScriptProperties(); }
+function leadChatId() {
+  try { var stored = leadProps().getProperty('LEAD_CHAT_ID'); if (stored) return String(stored); } catch (e) {}
+  return String(LEAD_CHAT_ID || '');
+}
+function tgApi(method, payload) {
+  return UrlFetchApp.fetch('https://api.telegram.org/bot' + LEAD_BOT_TOKEN + '/' + method, {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify(payload || {})
+  });
+}
+function tgJson(r) { try { return JSON.parse(r.getContentText('UTF-8')); } catch (e) { return { ok: false }; } }
+function sendLeadTelegram(text, markup) {
+  if (!hasLeadBot()) return false;
+  var cid = leadChatId();
+  if (!cid) return false;
+  try {
+    var body = { chat_id: cid, text: String(text).slice(0, 4000) };
+    if (markup) body.reply_markup = markup;
+    var r = tgApi('sendMessage', body);
+    return r.getResponseCode() === 200 && tgJson(r).ok === true;
+  } catch (e) { return false; }
+}
+
+/* -------- ОДНА КНОПКА: настроить бота полностью --------
+   Запуск: в редакторе скрипта выбрать setupLeadBot → «Выполнить».
+   Что делает: знакомится с ботом, находит ваш chat_id, ставит мини-апп
+   кнопку, команды, описание и вебхук (чтобы бот отвечал на /start).      */
+function setupLeadBot() {
+  var log = [];
+  if (!hasLeadBot()) {
+    Logger.log('❌ Сначала вставьте токен бота в переменную LEAD_BOT_TOKEN (строка в начале кода).');
+    return { ok: false, ru: 'нет токена' };
+  }
+  /* 1. кто такой бот */
+  var me = tgJson(tgApi('getMe', {}));
+  if (!me.ok) { Logger.log('❌ Telegram не принял токен. Проверьте, что скопировали его целиком.'); return { ok: false, ru: 'токен не подошёл' }; }
+  var botName = (me.result && me.result.username) || 'бот';
+  log.push('Бот: @' + botName);
+
+  /* 2. ваш chat_id — ищем в последних сообщениях (поэтому боту надо сначала написать) */
+  var cid = leadChatId();
+  if (!cid) {
+    var up = tgJson(tgApi('getUpdates', { limit: 20 }));
+    var list = (up.ok && up.result) || [];
+    for (var i = list.length - 1; i >= 0; i--) {
+      var m = list[i].message || list[i].edited_message || (list[i].channel_post) || null;
+      var cq = list[i].callback_query;
+      var chat = m ? m.chat : (cq ? cq.message && cq.message.chat : null);
+      if (chat && chat.id) { cid = String(chat.id); break; }
+    }
+    if (cid) { try { leadProps().setProperty('LEAD_CHAT_ID', cid); } catch (e) {} log.push('Ваш chat_id найден: ' + cid); }
+  } else log.push('chat_id: ' + cid);
+
+  /* 3. кнопка-меню = МИНИ-АПП с лендингом */
+  var mb = tgJson(tgApi('setChatMenuButton', { menu_button: { type: 'web_app', text: 'Открыть сайт', web_app: { url: LEAD_MINIAPP_URL } } }));
+  log.push(mb.ok ? 'Мини-апп кнопка поставлена ✅' : 'Мини-апп кнопка: не вышло (' + (mb.description || '?') + ')');
+
+  /* 4. команды и описание */
+  tgApi('setMyCommands', { commands: [
+    { command: 'start', description: 'Начать' },
+    { command: 'site', description: 'Открыть сайт-визитку' },
+    { command: 'price', description: 'Цены и что входит' },
+    { command: 'help', description: 'Как связаться' }
+  ] });
+  tgApi('setShortDescription', { short_description: 'Заявки на сайты и боты для салонов красоты' });
+  tgApi('setDescription', { description: 'Венера Тенюшева — сайты с онлайн-записью, админка и ИИ-ассистент для салонов красоты.\n\nНажмите кнопку «Открыть сайт» слева внизу — лендинг откроется прямо внутри Telegram, там можно оставить заявку.\n\nТелефон / WhatsApp: +7 927 850-44-16' });
+  log.push('Команды и описание обновлены');
+
+  /* 5. вебхук, чтобы бот отвечал сам; секрет в адресе — чужие запросы отсекаем */
+  try {
+    var sec = leadProps().getProperty('LEAD_TG_SECRET');
+    if (!sec) { sec = Utilities.getUuid().replace(/-/g, '').slice(0, 24); leadProps().setProperty('LEAD_TG_SECRET', sec); }
+    var hookUrl = ScriptApp.getService().getUrl() + '?tg=' + sec;
+    var wh = tgJson(tgApi('setWebhook', { url: hookUrl, allowed_updates: ['message', 'callback_query'], drop_pending_updates: true }));
+    log.push(wh.ok ? 'Бот отвечает на сообщения ✅' : 'Вебхук: не вышло (' + (wh.description || '?') + ')');
+  } catch (e) { log.push('Вебхук: ' + e); }
+
+  /* 6. контрольное сообщение вам */
+  if (cid) {
+    var sent = sendLeadTelegram('✅ Бот заявок настроен.\nТеперь сюда будут приходить заявки с лендинга ' + LEAD_MINIAPP_URL + '\nА кнопка «Открыть сайт» слева внизу открывает лендинг как мини-апп.', leadKeyboard());
+    log.push(sent ? 'Проверочное сообщение отправлено вам в Telegram ✅' : 'Проверочное сообщение не ушло — проверьте chat_id');
+  } else {
+    log.push('⚠ chat_id не найден. Откройте бота @' + botName + ' в Telegram, нажмите «Запустить» (или напишите «привет») и запустите setupLeadBot ещё раз.');
+  }
+  Logger.log('=== НАСТРОЙКА БОТА ЗАЯВОК ===\n' + log.join('\n'));
+  return { ok: true, bot: botName, chatId: cid, steps: log };
+}
+/* выключить автоответ бота (заявки в таблицу и почту продолжат ходить) */
+function leadBotOff() {
+  if (!hasLeadBot()) return { ok: false };
+  var r = tgJson(tgApi('deleteWebhook', { drop_pending_updates: true }));
+  Logger.log(r.ok ? 'Автоответ бота выключен.' : 'Не вышло: ' + (r.description || ''));
+  return { ok: !!r.ok };
+}
+function leadKeyboard() {
+  return { inline_keyboard: [
+    [{ text: '🌐 Открыть сайт-визитку', web_app: { url: LEAD_MINIAPP_URL } }],
+    [{ text: '💼 Портфолио', url: LEAD_PORTFOLIO_URL }, { text: '📞 WhatsApp', url: LEAD_PHONE_URL }]
+  ] };
+}
+function leadPriceText() {
+  return '💰 Что я делаю и сколько это стоит\n\n' +
+    '• Сайт-витрина с онлайн-записью — от 30 000 ₽\n' +
+    '• ИИ-ассистент, который отвечает клиентам 24/7 — от 30 000 ₽\n' +
+    '• Редактор, чтобы менять цены и услуги без программиста — от 30 000 ₽\n\n' +
+    'Оплата 50/50: половина до начала, половина когда всё работает.\n' +
+    'Живой пример — кнопка «Открыть сайт-визитку» ниже. Это не картинка, а настоящий салон, который работает.\n\n' +
+    'Связь: +7 927 850-44-16 (WhatsApp, Max), venera.web.4@gmail.com';
+}
+/* -------- ответы бота на сообщения (приходят вебхуком в doPost) --------
+   Логика простая: команды — по командам, всё остальное — живой текст.
+   Любой живой текст дублируется владелице: это тёплый лид, терять нельзя.   */
+function leadBotReply(u) {
+  var msg = u.message || u.edited_message;
+  var cq = u.callback_query;
+  try {
+    if (cq) { tgApi('answerCallbackQuery', { callback_query_id: cq.id }); return { ok: true, what: 'callback' }; }
+    if (!msg || !msg.chat) return { ok: false, what: 'no message' };
+    var chatId = msg.chat.id;
+    var text = String(msg.text || '').trim();
+    var low = text.toLowerCase();
+    var from = msg.from || {};
+    var out;
+
+    if (!text) {
+      out = tgApi('sendMessage', { chat_id: chatId, text: leadHello(), reply_markup: leadKeyboard() });
+    } else if (text.charAt(0) === '/') {
+      var cmd = low.split(' ')[0].split('@')[0];
+      if (cmd === '/price') {
+        out = tgApi('sendMessage', { chat_id: chatId, text: leadPriceText(), reply_markup: leadKeyboard() });
+      } else if (cmd === '/site') {
+        out = tgApi('sendMessage', { chat_id: chatId, text: '🌐 Живой пример салона — откроется прямо в Telegram:', reply_markup: leadKeyboard() });
+      } else if (cmd === '/start' || cmd === '/help') {
+        out = tgApi('sendMessage', { chat_id: chatId, text: leadHello(), reply_markup: leadKeyboard(), disable_web_page_preview: true });
+      } else {
+        out = tgApi('sendMessage', { chat_id: chatId, text: 'Есть команды: /price — цены, /site — живой пример сайта, /help — связь.', reply_markup: leadKeyboard() });
+      }
+    } else if (/^(привет|здравствуй|добрый|доброе|добрая|хай|hi|hello|start|ку)/.test(low) && low.length < 25) {
+      out = tgApi('sendMessage', { chat_id: chatId, text: leadHello(), reply_markup: leadKeyboard() });
+    } else {
+      /* живой текст: отвечаем по-человечески и сразу сообщаем владелице */
+      out = tgApi('sendMessage', { chat_id: chatId,
+        text: 'Спасибо, что написали! 💜\nСообщение уже у Венеры — она отвечает лично, обычно в течение пары часов.\n\n' +
+              'Пока можно посмотреть живой пример сайта (кнопка ниже) и цены: /price\n' +
+              'Или написать напрямую: +7 927 850-44-16 (WhatsApp, Max).',
+        reply_markup: leadKeyboard(), disable_web_page_preview: true });
+      try {
+        var who = from.username ? '@' + from.username : ((from.first_name || '') + ' ' + (from.last_name || '')).trim();
+        var back = from.username ? 'https://t.me/' + from.username : '(ник не указан — id ' + chatId + ')';
+        sendLeadTelegram('💬 Написали в бота заявок\nКто: ' + (who || 'неизвестно') + '\n' +
+                         'Текст: ' + text.slice(0, 800) + '\nОтветить: ' + back);
+      } catch (e) {}
+    }
+    return { ok: !!(out && out.getResponseCode() === 200), what: text || 'empty' };
+  } catch (e) { return { ok: false, what: String(e) }; }
+}
+function leadHello() {
+  return '👋 Здравствуйте! Я бот Венеры Тенюшевой — сайты и ИИ-ассистенты для салонов красоты.\n\n' +
+         'Нажмите «Открыть сайт-визитку» ниже: живой пример работающего салона откроется прямо здесь, в Telegram, и там же можно оставить заявку.\n\n' +
+         '/price — цены и что входит\n/site — открыть пример\n\n' +
+         'Связь: +7 927 850-44-16 (WhatsApp, Max)';
 }
 
 /* ======================= ГЛАВНОЕ: ЗАПИСЬ ======================= */
