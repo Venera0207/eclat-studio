@@ -112,47 +112,21 @@ global.ScriptApp = {
 };
 global.Logger = { log: (t) => LOGS.push(String(t)) };
 
-/* --- эмуляция Telegram Bot API: запоминаем все обращения к боту --- */
-const TG_CALLS = [];
-const AI_CALLS = [];
-const AI_ANSWER = 'ИИ отвечает: сайт для салона — от 30 000 ₽, оплата 50/50.';
-let TG_UPDATES = [];                                     /* что бот «видит» в getUpdates */
-let TG_ME = { ok: true, result: { username: 'venera_leads_test_bot', first_name: 'Тест' } };
-function tgResp(obj) { return { getResponseCode: () => 200, getContentText: () => JSON.stringify(obj) }; }
+/* --- эмуляция UrlFetch: труба салона читает только site-data.js ---
+   (Telegram и Z.ai здесь больше не нужны: бот заявок и «голова» ИИ
+   переехали в свой проект — репозиторий venera-sales, leadpipe.gs)   */
+const FETCHED = [];
 global.UrlFetchApp = {
   fetch: (url, opts) => {
-    opts = opts || {};
+    FETCHED.push(String(url));
     if (/site-data\.js/.test(url)) {
       return { getContentText: () => fs.readFileSync(path.join(__dirname, '..', 'site-data.js'), 'utf8'),
                getResponseCode: () => 200 };
     }
-    if (/api\.z\.ai/.test(url)) {
-      let payload = {};
-      try { payload = JSON.parse(opts.payload || '{}'); } catch (e) {}
-      const auth = (opts.headers || {})['Authorization'] || '';
-      AI_CALLS.push({ auth, payload });
-      if (/GOODKEY/.test(auth)) {
-        return tgResp({ choices: [{ message: { content: '**ИИ отвечает:** сайт для салона — от 30 000 ₽, оплата 50/50.' } }] });
-      }
-      return { getResponseCode: () => 401, getContentText: () => '{"error":"invalid key"}' };
-    }
-    const tg = /api\.telegram\.org\/bot([^/]+)\/(\w+)/.exec(url);
-    if (tg) {
-      const method = tg[2];
-      let payload = {};
-      try { payload = JSON.parse(opts.payload || '{}'); } catch (e) {}
-      TG_CALLS.push({ method, payload, token: tg[1] });
-      if (method === 'getMe') return tgResp(TG_ME);
-      if (method === 'getUpdates') return tgResp({ ok: true, result: TG_UPDATES });
-      if (method === 'sendMessage') {
-        return tgResp(payload.chat_id ? { ok: true, result: { message_id: TG_CALLS.length } }
-                                      : { ok: false, description: 'Bad Request: chat_id is empty' });
-      }
-      return tgResp({ ok: true, result: true });
-    }
     return { getContentText: () => '', getResponseCode: () => 200 };
   }
 };
+
 global.Utilities = {
   getUuid: () => 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   formatDate: (d, tz, pattern) => {
@@ -172,17 +146,7 @@ global.ContentService = {
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'backend', 'appsscript.gs'), 'utf8');
 /* в репозитории токен — плейсхолдер; для теста подставляем свой, не трогая файл */
 const TOKEN = 'ECLAT-TEST-TOKEN';
-const LEAD_TOKEN = '123456:TEST-LEAD-BOT';
-const AI_KEY = 'GOODKEY-ZAI-TEST';
-(0, eval)(SRC
-  .replace("var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';", 'var ADMIN_TOKEN = ' + JSON.stringify(TOKEN) + ';')
-  .replace("var LEAD_BOT_TOKEN = 'ВСТАВЬТЕ_ТОКЕН_БОТА_ЗАЯВОК';", 'var LEAD_BOT_TOKEN = ' + JSON.stringify(LEAD_TOKEN) + ';')
-  .replace(/var ZAI_KEY\s*=\s*'ВСТАВЬТЕ_КЛЮЧ_ZAI';/, 'var ZAI_KEY = ' + JSON.stringify(AI_KEY) + ';'));
-
-if (global.hasAi() !== true) {
-  console.error('Тест не смог подменить ZAI_KEY — проверьте строку объявления в appsscript.gs');
-  process.exit(1);
-}
+(0, eval)(SRC.replace("var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';", 'var ADMIN_TOKEN = ' + JSON.stringify(TOKEN) + ';'));
 
 if (global.ADMIN_TOKEN === 'ВСТАВЬТЕ_СВОЙ_ТОКЕН') {
   console.error('Тест не смог подменить ADMIN_TOKEN — проверьте строку объявления в appsscript.gs');
@@ -551,328 +515,83 @@ t('tidyAll: лист «Записи» по размеру, шапка закре
   assert.strictEqual(b.widths[8], 140, 'ширина телефона: ' + b.widths[8]);
 });
 
-t('leadusl: заявка с лендинга услуги падает в отдельную таблицу и шлёт письмо', () => {
-  const before = SENT_MAIL.length;
-  const r = call({ action: 'leadusl', salon: 'Локон', name: 'Мария', contact: '+7 900 123-45-67', want: 'Всё вместе', comment: 'город СПб, 4 мастера' });
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  assert.strictEqual(r.sheet, true); assert.strictEqual(r.mail, true);
-  const sh = DB.getSheetByName('Лиды услуги');
-  assert.ok(sh, 'таблица лидов не создана');
-  const row = sh.v[1];
-  assert.strictEqual(row[1], 'Локон');
-  assert.strictEqual(row[3], '+7 900 123-45-67');
-  assert.strictEqual(row[4], 'Всё вместе');
-  assert.strictEqual(SENT_MAIL.length, before + 1);
-});
-t('leadusl не мешает записям салона: лист «Записи» не тронут', () => {
-  const b = DB.getSheetByName('Записи');
-  const n = b.v.length;
-  call({ action: 'leadusl', salon: 'X', name: 'Y', contact: '70000000000', want: 'Сайт-витрина', comment: '' });
-  assert.strictEqual(DB.getSheetByName('Записи').v.length, n);
-});
-
-/* ---------- 9. бот заявок: Telegram + мини-апп ---------- */
-const tgPost = (tgParam, update) =>
-  JSON.parse(global.doPost({ parameter: { tg: tgParam }, postData: { contents: JSON.stringify(update) } }).getContent());
-const tgSent = () => TG_CALLS.filter(c => c.method === 'sendMessage');
-const secret = () => global.PropertiesService.getScriptProperties().getProperty('LEAD_TG_SECRET');
-
-t('ping честен про бота заявок: версия 2.4, бот, chat_id и «голова» ИИ на месте', () => {
+/* ---------- 9. труба ЧИСТО салонная: продажи переехали в venera-sales ---------- */
+t('ping: версия 2.5, и никакого бота заявок / «головы» ИИ', () => {
   const r = call({ action: 'ping' });
-  assert.strictEqual(r.version, 2.4);
-  assert.strictEqual(r.ai, true, 'ключ Z.ai не подхватился');
-  assert.strictEqual(r.leadBot, true, 'бот не подключён');
-  assert.strictEqual(r.leadUsl, true);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.version, 2.5);
+  assert.strictEqual(r.project, 'eclat-bookings');
+  assert.strictEqual(r.leadBot, undefined, 'в трубе салона остался бот заявок');
+  assert.strictEqual(r.leadUsl, undefined, 'в трубе салона остались лиды лендинга');
+  assert.strictEqual(r.ai, undefined, 'в трубе салона осталась «голова» ИИ');
 });
 
-t('setupLeadBot: сам находит chat_id, ставит мини-апп кнопку, команды и вебхук', () => {
-  TG_CALLS.length = 0;
-  TG_UPDATES = [{ update_id: 1, message: { message_id: 1, from: { id: 777001 },
-    chat: { id: 777001, type: 'private', first_name: 'Венера' }, text: 'привет' } }];
-  const r = global.setupLeadBot();
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  assert.strictEqual(r.chatId, '777001');
-  const methods = TG_CALLS.map(c => c.method);
-  ['getMe', 'getUpdates', 'setChatMenuButton', 'setMyCommands', 'setDescription', 'setWebhook', 'sendMessage']
-    .forEach(m => assert.ok(methods.indexOf(m) >= 0, 'не вызван ' + m + '; было: ' + methods.join(',')));
-  const mb = TG_CALLS.filter(c => c.method === 'setChatMenuButton')[0];
-  assert.strictEqual(mb.payload.menu_button.type, 'web_app', 'кнопка-меню не мини-апп');
-  assert.ok(/uslugi\/$/.test(mb.payload.menu_button.web_app.url), 'мини-апп ведёт не на лендинг: ' + mb.payload.menu_button.web_app.url);
-  const wh = TG_CALLS.filter(c => c.method === 'setWebhook')[0];
-  assert.ok(/[?&]tg=[a-z0-9]{16,}$/.test(wh.payload.url), 'вебхук без секрета: ' + wh.payload.url);
-  assert.ok(TG_CALLS.every(c => c.token === LEAD_TOKEN), 'бот заявок дёргается чужим токеном');
-  assert.ok(secret(), 'секрет вебхука не сохранён');
-});
-
-t('leadusl: заявка приходит в Telegram владельцу бота', () => {
-  TG_CALLS.length = 0;
-  const r = call({ action: 'leadusl', salon: 'Бархат', name: 'Ольга', contact: '+7 917 000-00-00',
-                   want: 'Бот', comment: 'Казань, 3 мастера', src: 'telegram-miniapp' });
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  assert.strictEqual(r.tg, true, 'телеграм не отправлен: ' + JSON.stringify(r));
-  assert.strictEqual(r.src, 'мини-апп Telegram');
-  assert.strictEqual(tgSent().length, 1);
-  assert.strictEqual(String(tgSent()[0].payload.chat_id), '777001');
-  const txt = tgSent()[0].payload.text;
-  ['Бархат', 'Ольга', '+7 917 000-00-00', 'Бот', 'мини-апп Telegram'].forEach(x =>
-    assert.ok(txt.indexOf(x) >= 0, 'в сообщении нет «' + x + '»: ' + txt));
-});
-
-t('leadusl: «Источник» попадает в таблицу и в письмо', () => {
-  const sh = DB.getSheetByName('Лиды услуги');
-  assert.strictEqual(sh.v[0].length, 8, 'шапка: ' + sh.v[0].join('|'));
-  assert.strictEqual(sh.v[0][7], 'Источник');
-  const row = sh.v[sh.v.length - 1];
-  assert.strictEqual(row[7], 'мини-апп Telegram');
-  assert.ok(/мини-апп Telegram/.test(SENT_MAIL[SENT_MAIL.length - 1].body), 'в письме нет источника');
-});
-
-t('старая таблица лидов на 7 колонок сама доучивается до 8', () => {
-  const sh = DB.getSheetByName('Лиды услуги');
-  sh.v[0] = ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус'];
-  call({ action: 'leadusl', salon: 'Ремонт шапки', name: 'А', contact: '70000000001', want: 'Сайт', comment: '' });
-  assert.strictEqual(sh.v[0].length, 8, 'шапка не починена: ' + sh.v[0].join('|'));
-  assert.strictEqual(sh.v[0][7], 'Источник');
-});
-
-t('без токена бота заявка всё равно сохраняется (таблица + письмо)', () => {
-  const saved = global.LEAD_BOT_TOKEN;
-  global.LEAD_BOT_TOKEN = 'ВСТАВЬТЕ_ТОКЕН_БОТА_ЗАЯВОК';
-  TG_CALLS.length = 0;
-  const mails = SENT_MAIL.length;
-  const r = call({ action: 'leadusl', salon: 'БезБота', name: 'Н', contact: '70000000002', want: 'Сайт', comment: '' });
-  global.LEAD_BOT_TOKEN = saved;
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  assert.strictEqual(r.tg, false, 'телеграм «отправился» без токена');
-  assert.strictEqual(tgSent().length, 0);
-  assert.strictEqual(SENT_MAIL.length, mails + 1, 'письмо не ушло');
-});
-
-t('бот отвечает на /start кнопкой мини-аппа', () => {
-  TG_CALLS.length = 0;
-  const r = tgPost(secret(), { update_id: 9, message: { message_id: 9, from: { id: 555 },
-    chat: { id: 555, type: 'private' }, text: '/start' } });
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  assert.strictEqual(tgSent().length, 1);
-  assert.strictEqual(tgSent()[0].payload.chat_id, 555);
-  const kb = tgSent()[0].payload.reply_markup.inline_keyboard[0][0];
-  assert.ok(kb.web_app && /uslugi\/$/.test(kb.web_app.url), 'в /start нет кнопки мини-аппа');
-});
-
-t('/price отвечает ценами «от 30 000 ₽»', () => {
-  TG_CALLS.length = 0;
-  tgPost(secret(), { update_id: 11, message: { chat: { id: 555 }, text: '/price' } });
-  assert.strictEqual(tgSent().length, 1);
-  const txt = tgSent()[0].payload.text;
-  assert.ok((txt.match(/30 000 ₽/g) || []).length >= 3, 'цены не все: ' + txt);
-  assert.ok(/50\/50/.test(txt), 'нет условия оплаты');
-});
-
-t('живой текст: человек получает ответ, владелица — уведомление со ссылкой «ответить»', () => {
-  TG_CALLS.length = 0;
-  tgPost(secret(), { update_id: 12, message: { from: { id: 888, username: 'salon_kzn' },
-    chat: { id: 888, type: 'private' }, text: 'Здравствуйте, хочу сайт для салона, Казань' } });
-  assert.strictEqual(tgSent().length, 2, 'должно быть два сообщения: ' + JSON.stringify(tgSent().map(x => x.payload.chat_id)));
-  assert.strictEqual(tgSent()[0].payload.chat_id, 888);
-  assert.ok(tgSent()[0].payload.reply_markup.inline_keyboard[0][0].web_app, 'в ответе нет кнопки мини-аппа');
-  assert.strictEqual(String(tgSent()[1].payload.chat_id), '777001', 'владелице не пришло уведомление');
-  const note = tgSent()[1].payload.text;
-  assert.ok(/salon_kzn/.test(note), 'в уведомлении нет ника: ' + note);
-  assert.ok(/t\.me\/salon_kzn/.test(note), 'нет ссылки «ответить»: ' + note);
-  assert.ok(/Казань/.test(note), 'текст клиента потерялся');
-});
-
-t('просто «привет» — приветствие без лишнего уведомления владелице', () => {
-  TG_CALLS.length = 0;
-  tgPost(secret(), { update_id: 14, message: { from: { id: 999 }, chat: { id: 999, type: 'private' }, text: 'привет' } });
-  assert.strictEqual(tgSent().length, 1, 'сообщений: ' + tgSent().length);
-  assert.strictEqual(tgSent()[0].payload.chat_id, 999);
-});
-
-t('/site даёт кнопку мини-аппа и ничего лишнего', () => {
-  TG_CALLS.length = 0;
-  tgPost(secret(), { update_id: 15, message: { chat: { id: 999 }, text: '/site' } });
-  assert.strictEqual(tgSent().length, 1);
-  assert.ok(/uslugi\/$/.test(tgSent()[0].payload.reply_markup.inline_keyboard[0][0].web_app.url));
-});
-
-t('чужой запрос на вебхук (неверный секрет) бота не дёргает', () => {
-  TG_CALLS.length = 0;
-  const r = tgPost('неверный-секрет', { update_id: 13, message: { chat: { id: 1 }, text: '/start' } });
+t('leadusl больше не принимается: заявки с лендинга ушли в трубу «Венера — продажи»', () => {
+  const r = call({ action: 'leadusl', salon: 'Локон', name: 'Мария', contact: '+7 900 123-45-67', want: 'Сайт', comment: '' });
   assert.strictEqual(r.ok, false);
-  assert.strictEqual(tgSent().length, 0);
+  assert.ok(/Unknown action/.test(r.error), JSON.stringify(r));
+  assert.ok(!/leadusl|aiTest/.test(r.hint), 'в подсказке всё ещё обещаны действия продаж: ' + r.hint);
+  assert.strictEqual(DB.getSheetByName('Лиды услуги'), null, 'в проекте салона создалась таблица лидов услуги');
+});
+
+t('aiTest больше не принимается (проверка ИИ живёт в трубе продаж)', () => {
+  assert.strictEqual(call({ action: 'aiTest', token: TOKEN }).ok, false);
+});
+
+t('в трубе салона не осталось ни функций бота, ни ИИ, ни таблицы лидов', () => {
+  ['setupLeadBot', 'leadBotOff', 'leadBotReply', 'doServiceLead', 'uslSheet', 'uslSS',
+   'aiReply', 'hasAi', 'testAiHead', 'foundPhone', 'tgApi', 'sendLeadTelegram', 'leadKeyboard']
+    .forEach(fn => assert.strictEqual(global[fn], undefined, 'в трубе салона осталась функция ' + fn));
+  assert.ok(!/LEAD_BOT_TOKEN|ZAI_KEY|Лиды услуги|venera_sites|setupLeadBot/.test(SRC), 'в коде остались следы продаж');
+  assert.ok(/doChatLead/.test(SRC), 'заявки из чата салона случайно удалены');
 });
 
 t('doPost с обычными данными сайта работает как раньше', () => {
   const r = JSON.parse(global.doPost({ parameter: {}, postData: { contents: JSON.stringify({ action: 'ping' }) } }).getContent());
   assert.strictEqual(r.ok, true);
-  assert.strictEqual(r.version, 2.4);
+  assert.strictEqual(r.version, 2.5);
 });
 
-/* ---------- 9b. «ГОЛОВА» ИИ бота заявок (ключ Z.ai) ---------- */
-t('test честно показывает, что ключ Z.ai вставлен', () => {
-  const r = call({ action: 'test' });
-  assert.strictEqual(r.aiKeySet, true);
-  assert.ok(/glm/.test(r.aiModel), 'модель: ' + r.aiModel);
-});
-
-t('живой вопрос: отвечает НЕЙРОСЕТЬ, а не заготовка', () => {
-  TG_CALLS.length = 0; AI_CALLS.length = 0;
-  tgPost(secret(), { update_id: 20, message: { from: { id: 888, username: 'salon_kzn' },
-    chat: { id: 888, type: 'private' }, text: 'Сколько стоит сайт для салона в Казани?' } });
-  assert.strictEqual(AI_CALLS.length, 1, 'нейросеть не вызвана');
-  assert.ok(/Bearer GOODKEY/.test(AI_CALLS[0].auth), 'ключ не передан: ' + AI_CALLS[0].auth);
-  assert.strictEqual(AI_CALLS[0].payload.model, 'glm-4.5-flash');
-  const toUser = tgSent().filter(c => c.payload.chat_id === 888);
-  assert.strictEqual(toUser.length, 1);
-  assert.ok(/30 000 ₽/.test(toUser[0].payload.text), 'ответ не от ИИ: ' + toUser[0].payload.text);
-  assert.ok(!/\*\*/.test(toUser[0].payload.text), 'в ответе остался markdown: ' + toUser[0].payload.text);
-  assert.ok(toUser[0].payload.text.length <= 4096, 'сообщение длиннее лимита Telegram');
-  assert.ok(toUser[0].payload.reply_markup.inline_keyboard[0][0].web_app, 'в ответе ИИ пропала кнопка мини-аппа');
-});
-
-t('системный промпт ИИ: только честные факты (цены, 50/50, демо, контакты)', () => {
-  const sys = AI_CALLS[0].payload.messages[0];
-  assert.strictEqual(sys.role, 'system');
-  ['от 30 000 ₽', '50/50', '+7 927 850-44-16', 'venera.web.4@gmail.com', 'ДЕМО', 'не выдумывай'].forEach(x =>
-    assert.ok(sys.content.indexOf(x) >= 0, 'в промпте нет «' + x + '»'));
-  assert.ok(sys.content.indexOf('шаблон') < 0 || /Не говори|не называй|слово «шаблон»/i.test(sys.content),
-    'слово «шаблон» разрешено ИИ');
-});
-
-t('бот помнит диалог: во второй вопрос уходит история', () => {
-  TG_CALLS.length = 0; AI_CALLS.length = 0;
-  tgPost(secret(), { update_id: 21, message: { from: { id: 888 }, chat: { id: 888, type: 'private' }, text: 'А сколько по времени делать?' } });
-  const m = AI_CALLS[0].payload.messages;
-  assert.ok(m.length >= 4, 'история не передана: ' + m.length + ' сообщ.');
-  assert.strictEqual(m[0].role, 'system', 'первым должно идти «что бот знает о деле»');
-  assert.strictEqual(m[1].role, 'user', 'вторым должно идти воспоминание о прошлой реплике');
-  assert.ok(/сайт для салона/i.test(m[1].content), 'прошлая реплика потерялась: ' + m[1].content);
-  assert.ok(m.some(x => x.role === 'assistant' && /30 000 ₽/.test(x.content)), 'прошлый ОТВЕТ бота не запомнен');
-  assert.strictEqual(m[m.length - 1].content, 'А сколько по времени делать?');
-  assert.ok(m.length <= 12, 'память разрастается без предела: ' + m.length);
-});
-
-t('человек оставил телефон — он сразу ложится в таблицу лидов', () => {
-  TG_CALLS.length = 0; AI_CALLS.length = 0;
-  const sh = DB.getSheetByName('Лиды услуги');
-  const before = sh.v.length;
-  tgPost(secret(), { update_id: 22, message: { from: { id: 4242, first_name: 'Ирина', last_name: 'П.' },
-    chat: { id: 4242, type: 'private' }, text: 'Хочу сайт, мой телефон 8 (917) 222-33-44' } });
-  assert.strictEqual(sh.v.length, before + 1, 'строка лида не добавилась');
-  const row = sh.v[sh.v.length - 1];
-  assert.strictEqual(row[3], '+7 917 222-33-44', 'контакт: ' + row[3]);
-  assert.strictEqual(row[7], 'чат с ботом', 'источник: ' + row[7]);
-  assert.ok(/Хочу сайт/.test(row[5]), 'текст клиента не сохранён: ' + row[5]);
-  const owner = tgSent().filter(c => String(c.payload.chat_id) === '777001');
-  assert.strictEqual(owner.length, 1, 'владелице пришло ' + owner.length + ' сообщений');
-  assert.ok(/ТЕПЛЫЙ ЛИД/.test(owner[0].payload.text), owner[0].payload.text);
-  assert.ok(/Ирина/.test(owner[0].payload.text), 'в уведомлении нет имени');
-});
-
-t('«12 мастеров, салон с 2010 года» телефоном НЕ считается (ложных лидов нет)', () => {
-  TG_CALLS.length = 0;
-  const sh = DB.getSheetByName('Лиды услуги');
-  const before = sh.v.length;
-  tgPost(secret(), { update_id: 25, message: { from: { id: 3131 }, chat: { id: 3131, type: 'private' },
-    text: 'У нас 12 мастеров, салон работает с 2010 года, бюджет примерно 300000' } });
-  assert.strictEqual(sh.v.length, before, 'в таблицу лёг ложный лид: ' + sh.v.slice(-1)[0]);
-  const owner = tgSent().filter(c => String(c.payload.chat_id) === '777001');
-  assert.strictEqual(owner.length, 1);
-  assert.ok(!/ТЕПЛЫЙ ЛИД/.test(owner[0].payload.text), owner[0].payload.text);
-});
-
-t('телефон в любом написании узнаётся: 89172223344, +7 917 222 33 44, (917)222-33-44', () => {
-  ['мой номер 89172223344', 'пишите на +7 917 222 33 44', 'тел (917)222-33-44'].forEach(txt => {
-    const sh = DB.getSheetByName('Лиды услуги');
-    const before = sh.v.length;
-    tgPost(secret(), { update_id: 26, message: { from: { id: 5150 }, chat: { id: 5150, type: 'private' }, text: txt } });
-    assert.strictEqual(sh.v.length, before + 1, 'не распознан телефон в «' + txt + '»');
-    assert.strictEqual(sh.v.slice(-1)[0][3], '+7 917 222-33-44', txt + ' → ' + sh.v.slice(-1)[0][3]);
-  });
-});
-
-t('без ключа Z.ai бот не молчит: вежливая запасная фраза + уведомление владелице', () => {
-  const saved = global.ZAI_KEY;
-  global.ZAI_KEY = 'ВСТАВЬТЕ_КЛЮЧ_ZAI';
-  TG_CALLS.length = 0; AI_CALLS.length = 0;
-  tgPost(secret(), { update_id: 23, message: { from: { id: 555 }, chat: { id: 555, type: 'private' }, text: 'здравствуйте, расскажите про бота' } });
-  global.ZAI_KEY = saved;
-  assert.strictEqual(AI_CALLS.length, 0, 'без ключа полезли в нейросеть');
-  const toUser = tgSent().filter(c => c.payload.chat_id === 555);
-  assert.strictEqual(toUser.length, 1);
-  assert.ok(/Венер|ответит лично/i.test(toUser[0].payload.text), toUser[0].payload.text);
-  assert.ok(!/401|invalid key|ошибка/i.test(toUser[0].payload.text), 'клиенту показали техническую ошибку');
-  assert.strictEqual(tgSent().filter(c => String(c.payload.chat_id) === '777001').length, 1, 'владелица не узнала о сообщении');
-});
-
-t('если Z.ai ответил ошибкой — клиент получает запасную фразу, а не тишину', () => {
-  const saved = global.ZAI_KEY;
-  global.ZAI_KEY = 'BADKEY-401';
-  TG_CALLS.length = 0;
-  tgPost(secret(), { update_id: 24, message: { from: { id: 666 }, chat: { id: 666, type: 'private' }, text: 'а что входит в сайт?' } });
-  global.ZAI_KEY = saved;
-  const toUser = tgSent().filter(c => c.payload.chat_id === 666);
-  assert.strictEqual(toUser.length, 1);
-  assert.ok(/BADKEY|401/.test(toUser[0].payload.text) === false, toUser[0].payload.text);
-  assert.ok(toUser[0].payload.text.length > 40, 'ответ слишком короткий: ' + toUser[0].payload.text);
-});
-
-t('testAiHead: проверка «головы» из редактора пишет в журнал и в Telegram', () => {
-  TG_CALLS.length = 0;
-  const r = global.testAiHead();
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  assert.ok(/30 000/.test(r.answer), r.answer);
-  assert.ok(tgSent().some(c => /ПРОВЕРКА|Проверка/.test(c.payload.text)), 'нет сообщения о проверке');
-});
-
-t('aiTest по ссылке из админки требует токен и возвращает ответ ИИ', () => {
-  assert.strictEqual(call({ action: 'aiTest' }).ok, false, 'aiTest работает без токена!');
-  const r = call({ action: 'aiTest', token: TOKEN });
-  assert.strictEqual(r.ok, true, JSON.stringify(r));
-  assert.strictEqual(r.ai, true);
-  assert.ok(/30 000/.test(r.answer), r.answer);
+t('doPost больше НЕ отвечает на обновления Telegram: вебхук бота переехал', () => {
+  const r = JSON.parse(global.doPost({ parameter: {}, postData: { contents: JSON.stringify(
+    { update_id: 1, message: { chat: { id: 5 }, text: '/start' } }) } }).getContent());
+  assert.strictEqual(r.ok, false, 'труба салона всё ещё отвечает боту: ' + JSON.stringify(r));
 });
 
 /* ---------- 9c. КРАСИВАЯ ТАБЛИЦА: без пустых колонок, по-русски, текст целиком ---------- */
-t('таблица лидов: ровно 8 колонок, пустых справа нет', () => {
-  const sh = DB.getSheetByName('Лиды услуги');
+t('лист «Заявки из чата»: ровно 5 колонок, пустых справа нет, шапка по-русски', () => {
+  call({ action: 'lead', name: 'Клиент', contact: '+7 900 000-00-00', message: 'вопрос про запись', source: 'eclat-assistant' });
+  const sh = DB.getSheetByName('Заявки из чата');
   global.tidyAll();
-  assert.strictEqual(sh.maxCols, 8, 'колонок: ' + sh.maxCols);
-  assert.strictEqual(sh.v[0].length, 8);
-});
-
-t('заголовки — по-русски, и все на месте', () => {
-  const head = DB.getSheetByName('Лиды услуги').v[0];
-  assert.deepStrictEqual(head, ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус', 'Источник']);
-  head.forEach(h => assert.ok(h && /[а-яА-Я]/.test(h), 'заголовок не по-русски: ' + h));
+  assert.strictEqual(sh.maxCols, 5, 'колонок: ' + sh.maxCols);
+  assert.deepStrictEqual(sh.v[0], ['Дата', 'Имя', 'Контакт', 'Диалог', 'Источник']);
+  sh.v[0].forEach(h => assert.ok(h && /[а-яА-Я]/.test(h), 'заголовок не по-русски: ' + h));
 });
 
 t('шапка оформлена: фирменный фон, белый жирный текст, закреплена', () => {
-  const sh = DB.getSheetByName('Лиды услуги');
+  const sh = DB.getSheetByName('Заявки из чата');
   assert.strictEqual(sh.style['1:1:bg'], '#4C2E9E', 'фон шапки: ' + sh.style['1:1:bg']);
   assert.strictEqual(sh.style['1:1:color'], '#FFFFFF');
-  assert.strictEqual(sh.style['1:8:bold'], 'bold');
+  assert.strictEqual(sh.style['1:5:bold'], 'bold');
   assert.strictEqual(sh.frozen, 1, 'шапка не закреплена');
 });
 
 t('длинный текст — с переносом и в широкой колонке, ничего не обрезано', () => {
-  const sh = DB.getSheetByName('Лиды услуги');
+  const sh = DB.getSheetByName('Заявки из чата');
   const n = sh.v.length;
-  assert.ok(sh.widths[6] >= 520, 'колонка «Комментарий» узкая: ' + sh.widths[6]);
-  for (let r = 2; r <= n; r++) assert.strictEqual(sh.style[r + ':6:wrap'], true, 'в строке ' + r + ' нет переноса текста');
+  assert.ok(sh.widths[4] >= 520, 'колонка «Диалог» узкая: ' + sh.widths[4]);
+  for (let r = 2; r <= n; r++) assert.strictEqual(sh.style[r + ':4:wrap'], true, 'в строке ' + r + ' нет переноса текста');
   assert.deepStrictEqual(sh.resized, [2, n - 1], 'высота строк не подобрана по содержимому');
   assert.strictEqual(sh.style['2:1:valign'], 'top', 'текст не прижат к верху');
 });
 
 t('диалог на 25 000 знаков сохраняется ЦЕЛИКОМ (лимит Google — 50 000)', () => {
-  const long = Array.from({ length: 500 }, (_, i) => 'Клиент: строка диалога номер ' + (i + 1) + ' — вопрос про сайт и цены.').join('\n');
+  const long = Array.from({ length: 500 }, (_, i) => 'Клиент: строка диалога номер ' + (i + 1) + ' — вопрос про запись и цены.').join('\n');
   assert.ok(long.length > 25000, 'тестовый текст короткий: ' + long.length);
-  const r = call({ action: 'leadusl', salon: 'Длинный Диалог', name: 'Т', contact: '70000000008', want: 'Сайт', comment: long });
+  const r = call({ action: 'lead', name: 'Длинный Диалог', contact: '70000000008', message: long, source: 'eclat-assistant' });
   assert.strictEqual(r.ok, true, JSON.stringify(r));
-  const row = DB.getSheetByName('Лиды услуги').v.slice(-1)[0];
-  assert.strictEqual(row[5].length, long.length, 'сохранено ' + row[5].length + ' из ' + long.length);
-  assert.strictEqual(row[5], long, 'текст диалога искажён');
+  const row = DB.getSheetByName('Заявки из чата').v.slice(-1)[0];
+  assert.strictEqual(row[3], long, 'сохранено ' + String(row[3]).length + ' из ' + long.length);
 });
 
 t('заявка из чата салона: лист «Заявки из чата» тоже по размеру и с переносом', () => {
@@ -887,20 +606,19 @@ t('заявка из чата салона: лист «Заявки из чат�
 
 t('новая таблица создаётся без пустой вкладки «Sheet1»', () => {
   const fresh = new Spreadsheet('свежая');
-  const s1 = new Sheet('Sheet1');
-  fresh.sheets.push(s1);
-  const savedCreate = global.SpreadsheetApp.create, savedOpen = global.SpreadsheetApp.openById, savedId = PROPS['USL_DB_ID'];
+  fresh.sheets.push(new Sheet('Sheet1'));
+  const savedCreate = global.SpreadsheetApp.create, savedOpen = global.SpreadsheetApp.openById, savedId = PROPS['DB_ID'];
   global.SpreadsheetApp.create = () => fresh;
   global.SpreadsheetApp.openById = () => fresh;
-  PROPS['USL_DB_ID'] = 'FRESH_ID';
-  const r = call({ action: 'leadusl', salon: 'Свежая Таблица', name: 'Т', contact: '70000000009', want: 'Сайт', comment: 'первая заявка' });
+  PROPS['DB_ID'] = 'FRESH_ID';
+  const r = call({ action: 'lead', name: 'Свежая Таблица', contact: '70000000009', message: 'первая заявка', source: 'чат' });
   global.SpreadsheetApp.create = savedCreate; global.SpreadsheetApp.openById = savedOpen;
-  if (savedId === undefined) delete PROPS['USL_DB_ID']; else PROPS['USL_DB_ID'] = savedId;
+  if (savedId === undefined) delete PROPS['DB_ID']; else PROPS['DB_ID'] = savedId;
   assert.strictEqual(r.ok, true, JSON.stringify(r));
   assert.strictEqual(fresh.getSheets().length, 1, 'вкладок: ' + fresh.getSheets().map(x => x.name).join(','));
-  assert.strictEqual(fresh.getSheets()[0].name, 'Лиды услуги');
-  assert.deepStrictEqual(fresh.getSheets()[0].v[0], ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус', 'Источник']);
-  assert.strictEqual(fresh.getSheets()[0].maxCols, 8, 'пустые колонки остались: ' + fresh.getSheets()[0].maxCols);
+  assert.strictEqual(fresh.getSheets()[0].name, 'Заявки из чата');
+  assert.deepStrictEqual(fresh.getSheets()[0].v[0], ['Дата', 'Имя', 'Контакт', 'Диалог', 'Источник']);
+  assert.strictEqual(fresh.getSheets()[0].maxCols, 5, 'пустые колонки остались: ' + fresh.getSheets()[0].maxCols);
 });
 
 t('tidyAll убирает пустую вкладку «Sheet1» из рабочей таблицы', () => {
