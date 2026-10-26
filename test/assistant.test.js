@@ -11,10 +11,16 @@ function sheetsParse(v) {
   return v;
 }
 class Sheet {
-  constructor(name) { this.name = name; this.v = []; this.fmt = {}; this.widths = {}; this.maxCols = 26; }
+  constructor(name) { this.name = name; this.v = []; this.fmt = {}; this.widths = {}; this.maxCols = 26;
+                      this.maxRows = 1000; this.style = {}; this.resized = null; this.rowH = {}; }
   setColumnWidth(c, w) { this.widths[c] = w; return this; }
   deleteColumns(start, n) { this.maxCols = Math.min(this.maxCols, start - 1); this.deleted = [start, n]; return this; }
   getMaxColumns() { return this.maxCols; }
+  getMaxRows() { return this.maxRows; }
+  deleteRows(start, n) { this.maxRows = Math.max(1, start - 1); this.v = this.v.slice(0, start - 1); return this; }
+  setRowHeight(r, h) { this.rowH[r] = h; return this; }
+  autoResizeRows(start, n) { this.resized = [start, n]; return this; }
+  setName(n) { this.name = n; return this; }
   setFrozenRows(n) { this.frozen = n; return this; }
   getName() { return this.name; }
   getLastRow() { return this.v.length; }
@@ -45,9 +51,16 @@ class Sheet {
         for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.fmt[(r + i) + ':' + (c + j)] = f;
         return range;
       },
-      setWrap: () => range,
-      setVerticalAlignment: () => range,
-      setFontWeight: () => range
+      setWrap: (on) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':wrap'] = on !== false; return range; },
+      setVerticalAlignment: (a) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':valign'] = a; return range; },
+      setHorizontalAlignment: () => range,
+      setFontWeight: (w) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':bold'] = w; return range; },
+      setFontColor: (col) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':color'] = col; return range; },
+      setBackground: (col) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':bg'] = col; return range; },
+      setValues: (rows2d) => {
+        for (let i = 0; i < nr; i++) { const row = s.v[r - 1 + i]; if (row) for (let j = 0; j < nc; j++) row[c - 1 + j] = rows2d[i][j]; }
+        return range;
+      }
     };
     return range;
   }
@@ -55,7 +68,9 @@ class Sheet {
 class Spreadsheet {
   constructor(n) { this.n = n; this.sheets = []; }
   getSheetByName(n) { return this.sheets.filter(s => s.name === n)[0] || null; }
+  getSheets() { return this.sheets.slice(); }
   insertSheet(n) { const s = new Sheet(n); this.sheets.push(s); return s; }
+  deleteSheet(sh) { this.sheets = this.sheets.filter(x => x !== sh); return this; }
   getId() { return 'FAKE_ASSIST'; }
 }
 
@@ -204,7 +219,7 @@ t('лист «Заявки» приведён к размеру: 5 колоно�
   const sh = DB.getSheetByName('Заявки');
   assert.strictEqual(sh.maxCols, 5, 'колонок: ' + sh.maxCols);
   assert.strictEqual(sh.frozen, 1, 'шапка не закреплена');
-  assert.strictEqual(sh.widths[4], 480, 'ширина колонки диалога: ' + sh.widths[4]);
+  assert.strictEqual(sh.widths[4], 620, 'ширина колонки диалога: ' + sh.widths[4]);
 });
 t('doPost: журнал диалога создаёт лист «Диалоги» и пишет строку', () => {
   global.doPost({ postData: { contents: JSON.stringify({ sid: 's9', page: 'eclat-assistant', bot: 'Клиент: привет\nАссистент: здравствуйте', outcome: 'kb' }) } });
@@ -220,6 +235,64 @@ t('doPost: заявка сохраняет источник из запроса,
   const row = sh.v[sh.v.length - 1];
   assert.strictEqual(row[1], 'Источник Тест');
   assert.strictEqual(row[4], 'eclat-assistant', 'источник: ' + row[4]);
+});
+
+/* --- красота и полнота текста (v2.2) --- */
+t('версия трубы 2.2 — таблицы делаются красивыми сами', () => {
+  assert.strictEqual(call({ action: 'ping' }).version, 2.2);
+  assert.strictEqual(call({ action: 'test' }).version, 2.2);
+});
+
+t('заголовки по-русски: «SID» заменён на «Код диалога», старая шапка чинится сама', () => {
+  const sh = DB.getSheetByName('Диалоги');
+  sh.v[0] = ['Дата', 'SID', 'Страница', 'Контакт', 'Весь диалог', 'Итог'];
+  global.tidyAll();
+  assert.deepStrictEqual(sh.v[0], ['Дата', 'Код диалога', 'Страница', 'Контакт', 'Весь диалог', 'Итог']);
+  sh.v[0].forEach(h => assert.ok(/[а-яА-Я]/.test(h), 'заголовок не по-русски: ' + h));
+});
+
+t('шапка оформлена по-фирменному и закреплена', () => {
+  const sh = DB.getSheetByName('Заявки');
+  assert.strictEqual(sh.style['1:1:bg'], '#4C2E9E', 'фон шапки: ' + sh.style['1:1:bg']);
+  assert.strictEqual(sh.style['1:1:color'], '#FFFFFF');
+  assert.strictEqual(sh.style['1:5:bold'], 'bold');
+  assert.strictEqual(sh.frozen, 1);
+  assert.strictEqual(sh.maxCols, 5, 'лишние колонки: ' + sh.maxCols);
+});
+
+t('диалог сохраняется ПОЛНОСТЬЮ: 30 000 знаков без обрезки', () => {
+  const long = Array.from({ length: 600 }, (_, i) => 'Клиент: реплика ' + (i + 1) + ' — спрашивает про стрижку и свободные окна.').join('\n');
+  assert.ok(long.length > 30000, 'тест короткий: ' + long.length);
+  const r = call({ action: 'lead', name: 'Полный Текст', contact: '+7 900 555-44-33', message: long, source: 'eclat-assistant' });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  const row = DB.getSheetByName('Заявки').v.slice(-1)[0];
+  assert.strictEqual(row[3], long, 'сохранено ' + row[3].length + ' из ' + long.length);
+});
+
+t('журнал диалога: весь разговор целиком, с переносом строк и широкой колонкой', () => {
+  const long = Array.from({ length: 900 }, (_, i) => 'Ассистент: ответ ' + (i + 1)).join('\n');
+  call({ action: 'log', sid: 'long-1', page: 'eclat-assistant', bot: long, outcome: 'kb' });
+  const sh = DB.getSheetByName('Диалоги');
+  const row = sh.v.slice(-1)[0];
+  assert.strictEqual(row[4].length, long.length, 'обрезано: ' + row[4].length + ' из ' + long.length);
+  assert.ok(sh.widths[5] >= 620, 'колонка диалога узкая: ' + sh.widths[5]);
+  assert.strictEqual(sh.style[sh.v.length + ':5:wrap'], true, 'нет переноса текста');
+  assert.deepStrictEqual(sh.resized, [2, sh.v.length - 1], 'высота строк не подобрана');
+});
+
+t('пустая вкладка «Sheet1» удаляется при приборке', () => {
+  const junk = new Sheet('Sheet1');
+  DB.sheets.push(junk);
+  global.tidyAll();
+  assert.strictEqual(DB.getSheetByName('Sheet1'), null, 'пустая вкладка осталась');
+  assert.ok(DB.getSheetByName('Заявки') && DB.getSheetByName('Диалоги'), 'рабочие листы задеты');
+});
+
+t('tidy доступен по ссылке и не ломает данные', () => {
+  const before = DB.getSheetByName('Заявки').v.length;
+  const r = call({ action: 'tidy' });
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(DB.getSheetByName('Заявки').v.length, before, 'приборка съела строки');
 });
 
 console.log('\n=== ' + pass + ' пройдено, ' + fail + ' провалено ===');
