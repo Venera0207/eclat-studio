@@ -15,10 +15,16 @@ function sheetsParse(v) {
   return v;
 }
 class Sheet {
-  constructor(name) { this.name = name; this.v = []; this.fmt = {}; this.widths = {}; this.maxCols = 26; }
+  constructor(name) { this.name = name; this.v = []; this.fmt = {}; this.widths = {}; this.maxCols = 26;
+                      this.maxRows = 1000; this.style = {}; this.resized = null; this.rowH = {}; }
   setColumnWidth(c, w) { this.widths[c] = w; return this; }
   deleteColumns(start, n) { this.maxCols = Math.min(this.maxCols, start - 1); return this; }
   getMaxColumns() { return this.maxCols; }
+  getMaxRows() { return this.maxRows; }
+  deleteRows(start, n) { this.maxRows = Math.max(1, start - 1); this.v = this.v.slice(0, start - 1); return this; }
+  setRowHeight(r, h) { this.rowH[r] = h; return this; }
+  autoResizeRows(start, n) { this.resized = [start, n]; return this; }
+  setName(n) { this.name = n; return this; }
   setFrozenRows(n) { this.frozen = n; return this; }
   getName() { return this.name; }
   getLastRow() { return this.v.length; }
@@ -54,9 +60,12 @@ class Sheet {
         for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.fmt[(r + i) + ':' + (c + j)] = f;
         return range;
       },
-      setWrap: () => range,
-      setVerticalAlignment: () => range,
-      setFontWeight: () => range,
+      setWrap: (on) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':wrap'] = on !== false; return range; },
+      setVerticalAlignment: (a) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':valign'] = a; return range; },
+      setHorizontalAlignment: () => range,
+      setFontWeight: (w) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':bold'] = w; return range; },
+      setFontColor: (col) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':color'] = col; return range; },
+      setBackground: (col) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) s.style[(r + i) + ':' + (c + j) + ':bg'] = col; return range; },
       setValues: (rows2d) => {
         for (let i = 0; i < nr; i++) { const row = s.v[r - 1 + i]; if (row) for (let j = 0; j < nc; j++) row[c - 1 + j] = rows2d[i][j]; }
         return range;
@@ -68,7 +77,9 @@ class Sheet {
 class Spreadsheet {
   constructor(name) { this.name = name; this.sheets = []; }
   getSheetByName(n) { return this.sheets.filter(s => s.name === n)[0] || null; }
+  getSheets() { return this.sheets.slice(); }
   insertSheet(n) { const s = new Sheet(n); this.sheets.push(s); return s; }
+  deleteSheet(sh) { this.sheets = this.sheets.filter(x => x !== sh); return this; }
   getId() { return 'FAKE_' + this.name; }
 }
 
@@ -103,6 +114,8 @@ global.Logger = { log: (t) => LOGS.push(String(t)) };
 
 /* --- эмуляция Telegram Bot API: запоминаем все обращения к боту --- */
 const TG_CALLS = [];
+const AI_CALLS = [];
+const AI_ANSWER = 'ИИ отвечает: сайт для салона — от 30 000 ₽, оплата 50/50.';
 let TG_UPDATES = [];                                     /* что бот «видит» в getUpdates */
 let TG_ME = { ok: true, result: { username: 'venera_leads_test_bot', first_name: 'Тест' } };
 function tgResp(obj) { return { getResponseCode: () => 200, getContentText: () => JSON.stringify(obj) }; }
@@ -112,6 +125,16 @@ global.UrlFetchApp = {
     if (/site-data\.js/.test(url)) {
       return { getContentText: () => fs.readFileSync(path.join(__dirname, '..', 'site-data.js'), 'utf8'),
                getResponseCode: () => 200 };
+    }
+    if (/api\.z\.ai/.test(url)) {
+      let payload = {};
+      try { payload = JSON.parse(opts.payload || '{}'); } catch (e) {}
+      const auth = (opts.headers || {})['Authorization'] || '';
+      AI_CALLS.push({ auth, payload });
+      if (/GOODKEY/.test(auth)) {
+        return tgResp({ choices: [{ message: { content: '**ИИ отвечает:** сайт для салона — от 30 000 ₽, оплата 50/50.' } }] });
+      }
+      return { getResponseCode: () => 401, getContentText: () => '{"error":"invalid key"}' };
     }
     const tg = /api\.telegram\.org\/bot([^/]+)\/(\w+)/.exec(url);
     if (tg) {
@@ -150,9 +173,16 @@ const SRC = fs.readFileSync(path.join(__dirname, '..', 'backend', 'appsscript.gs
 /* в репозитории токен — плейсхолдер; для теста подставляем свой, не трогая файл */
 const TOKEN = 'ECLAT-TEST-TOKEN';
 const LEAD_TOKEN = '123456:TEST-LEAD-BOT';
+const AI_KEY = 'GOODKEY-ZAI-TEST';
 (0, eval)(SRC
   .replace("var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';", 'var ADMIN_TOKEN = ' + JSON.stringify(TOKEN) + ';')
-  .replace("var LEAD_BOT_TOKEN = 'ВСТАВЬТЕ_ТОКЕН_БОТА_ЗАЯВОК';", 'var LEAD_BOT_TOKEN = ' + JSON.stringify(LEAD_TOKEN) + ';'));
+  .replace("var LEAD_BOT_TOKEN = 'ВСТАВЬТЕ_ТОКЕН_БОТА_ЗАЯВОК';", 'var LEAD_BOT_TOKEN = ' + JSON.stringify(LEAD_TOKEN) + ';')
+  .replace(/var ZAI_KEY\s*=\s*'ВСТАВЬТЕ_КЛЮЧ_ZAI';/, 'var ZAI_KEY = ' + JSON.stringify(AI_KEY) + ';'));
+
+if (global.hasAi() !== true) {
+  console.error('Тест не смог подменить ZAI_KEY — проверьте строку объявления в appsscript.gs');
+  process.exit(1);
+}
 
 if (global.ADMIN_TOKEN === 'ВСТАВЬТЕ_СВОЙ_ТОКЕН') {
   console.error('Тест не смог подменить ADMIN_TOKEN — проверьте строку объявления в appsscript.gs');
@@ -547,9 +577,10 @@ const tgPost = (tgParam, update) =>
 const tgSent = () => TG_CALLS.filter(c => c.method === 'sendMessage');
 const secret = () => global.PropertiesService.getScriptProperties().getProperty('LEAD_TG_SECRET');
 
-t('ping честен про бота заявок: версия 2.3, бот и chat_id на месте', () => {
+t('ping честен про бота заявок: версия 2.4, бот, chat_id и «голова» ИИ на месте', () => {
   const r = call({ action: 'ping' });
-  assert.strictEqual(r.version, 2.3);
+  assert.strictEqual(r.version, 2.4);
+  assert.strictEqual(r.ai, true, 'ключ Z.ai не подхватился');
   assert.strictEqual(r.leadBot, true, 'бот не подключён');
   assert.strictEqual(r.leadUsl, true);
 });
@@ -675,7 +706,209 @@ t('чужой запрос на вебхук (неверный секрет) б�
 t('doPost с обычными данными сайта работает как раньше', () => {
   const r = JSON.parse(global.doPost({ parameter: {}, postData: { contents: JSON.stringify({ action: 'ping' }) } }).getContent());
   assert.strictEqual(r.ok, true);
-  assert.strictEqual(r.version, 2.3);
+  assert.strictEqual(r.version, 2.4);
+});
+
+/* ---------- 9b. «ГОЛОВА» ИИ бота заявок (ключ Z.ai) ---------- */
+t('test честно показывает, что ключ Z.ai вставлен', () => {
+  const r = call({ action: 'test' });
+  assert.strictEqual(r.aiKeySet, true);
+  assert.ok(/glm/.test(r.aiModel), 'модель: ' + r.aiModel);
+});
+
+t('живой вопрос: отвечает НЕЙРОСЕТЬ, а не заготовка', () => {
+  TG_CALLS.length = 0; AI_CALLS.length = 0;
+  tgPost(secret(), { update_id: 20, message: { from: { id: 888, username: 'salon_kzn' },
+    chat: { id: 888, type: 'private' }, text: 'Сколько стоит сайт для салона в Казани?' } });
+  assert.strictEqual(AI_CALLS.length, 1, 'нейросеть не вызвана');
+  assert.ok(/Bearer GOODKEY/.test(AI_CALLS[0].auth), 'ключ не передан: ' + AI_CALLS[0].auth);
+  assert.strictEqual(AI_CALLS[0].payload.model, 'glm-4.5-flash');
+  const toUser = tgSent().filter(c => c.payload.chat_id === 888);
+  assert.strictEqual(toUser.length, 1);
+  assert.ok(/30 000 ₽/.test(toUser[0].payload.text), 'ответ не от ИИ: ' + toUser[0].payload.text);
+  assert.ok(!/\*\*/.test(toUser[0].payload.text), 'в ответе остался markdown: ' + toUser[0].payload.text);
+  assert.ok(toUser[0].payload.text.length <= 4096, 'сообщение длиннее лимита Telegram');
+  assert.ok(toUser[0].payload.reply_markup.inline_keyboard[0][0].web_app, 'в ответе ИИ пропала кнопка мини-аппа');
+});
+
+t('системный промпт ИИ: только честные факты (цены, 50/50, демо, контакты)', () => {
+  const sys = AI_CALLS[0].payload.messages[0];
+  assert.strictEqual(sys.role, 'system');
+  ['от 30 000 ₽', '50/50', '+7 927 850-44-16', 'venera.web.4@gmail.com', 'ДЕМО', 'не выдумывай'].forEach(x =>
+    assert.ok(sys.content.indexOf(x) >= 0, 'в промпте нет «' + x + '»'));
+  assert.ok(sys.content.indexOf('шаблон') < 0 || /Не говори|не называй|слово «шаблон»/i.test(sys.content),
+    'слово «шаблон» разрешено ИИ');
+});
+
+t('бот помнит диалог: во второй вопрос уходит история', () => {
+  TG_CALLS.length = 0; AI_CALLS.length = 0;
+  tgPost(secret(), { update_id: 21, message: { from: { id: 888 }, chat: { id: 888, type: 'private' }, text: 'А сколько по времени делать?' } });
+  const m = AI_CALLS[0].payload.messages;
+  assert.ok(m.length >= 4, 'история не передана: ' + m.length + ' сообщ.');
+  assert.strictEqual(m[0].role, 'system', 'первым должно идти «что бот знает о деле»');
+  assert.strictEqual(m[1].role, 'user', 'вторым должно идти воспоминание о прошлой реплике');
+  assert.ok(/сайт для салона/i.test(m[1].content), 'прошлая реплика потерялась: ' + m[1].content);
+  assert.ok(m.some(x => x.role === 'assistant' && /30 000 ₽/.test(x.content)), 'прошлый ОТВЕТ бота не запомнен');
+  assert.strictEqual(m[m.length - 1].content, 'А сколько по времени делать?');
+  assert.ok(m.length <= 12, 'память разрастается без предела: ' + m.length);
+});
+
+t('человек оставил телефон — он сразу ложится в таблицу лидов', () => {
+  TG_CALLS.length = 0; AI_CALLS.length = 0;
+  const sh = DB.getSheetByName('Лиды услуги');
+  const before = sh.v.length;
+  tgPost(secret(), { update_id: 22, message: { from: { id: 4242, first_name: 'Ирина', last_name: 'П.' },
+    chat: { id: 4242, type: 'private' }, text: 'Хочу сайт, мой телефон 8 (917) 222-33-44' } });
+  assert.strictEqual(sh.v.length, before + 1, 'строка лида не добавилась');
+  const row = sh.v[sh.v.length - 1];
+  assert.strictEqual(row[3], '+7 917 222-33-44', 'контакт: ' + row[3]);
+  assert.strictEqual(row[7], 'чат с ботом', 'источник: ' + row[7]);
+  assert.ok(/Хочу сайт/.test(row[5]), 'текст клиента не сохранён: ' + row[5]);
+  const owner = tgSent().filter(c => String(c.payload.chat_id) === '777001');
+  assert.strictEqual(owner.length, 1, 'владелице пришло ' + owner.length + ' сообщений');
+  assert.ok(/ТЕПЛЫЙ ЛИД/.test(owner[0].payload.text), owner[0].payload.text);
+  assert.ok(/Ирина/.test(owner[0].payload.text), 'в уведомлении нет имени');
+});
+
+t('«12 мастеров, салон с 2010 года» телефоном НЕ считается (ложных лидов нет)', () => {
+  TG_CALLS.length = 0;
+  const sh = DB.getSheetByName('Лиды услуги');
+  const before = sh.v.length;
+  tgPost(secret(), { update_id: 25, message: { from: { id: 3131 }, chat: { id: 3131, type: 'private' },
+    text: 'У нас 12 мастеров, салон работает с 2010 года, бюджет примерно 300000' } });
+  assert.strictEqual(sh.v.length, before, 'в таблицу лёг ложный лид: ' + sh.v.slice(-1)[0]);
+  const owner = tgSent().filter(c => String(c.payload.chat_id) === '777001');
+  assert.strictEqual(owner.length, 1);
+  assert.ok(!/ТЕПЛЫЙ ЛИД/.test(owner[0].payload.text), owner[0].payload.text);
+});
+
+t('телефон в любом написании узнаётся: 89172223344, +7 917 222 33 44, (917)222-33-44', () => {
+  ['мой номер 89172223344', 'пишите на +7 917 222 33 44', 'тел (917)222-33-44'].forEach(txt => {
+    const sh = DB.getSheetByName('Лиды услуги');
+    const before = sh.v.length;
+    tgPost(secret(), { update_id: 26, message: { from: { id: 5150 }, chat: { id: 5150, type: 'private' }, text: txt } });
+    assert.strictEqual(sh.v.length, before + 1, 'не распознан телефон в «' + txt + '»');
+    assert.strictEqual(sh.v.slice(-1)[0][3], '+7 917 222-33-44', txt + ' → ' + sh.v.slice(-1)[0][3]);
+  });
+});
+
+t('без ключа Z.ai бот не молчит: вежливая запасная фраза + уведомление владелице', () => {
+  const saved = global.ZAI_KEY;
+  global.ZAI_KEY = 'ВСТАВЬТЕ_КЛЮЧ_ZAI';
+  TG_CALLS.length = 0; AI_CALLS.length = 0;
+  tgPost(secret(), { update_id: 23, message: { from: { id: 555 }, chat: { id: 555, type: 'private' }, text: 'здравствуйте, расскажите про бота' } });
+  global.ZAI_KEY = saved;
+  assert.strictEqual(AI_CALLS.length, 0, 'без ключа полезли в нейросеть');
+  const toUser = tgSent().filter(c => c.payload.chat_id === 555);
+  assert.strictEqual(toUser.length, 1);
+  assert.ok(/Венер|ответит лично/i.test(toUser[0].payload.text), toUser[0].payload.text);
+  assert.ok(!/401|invalid key|ошибка/i.test(toUser[0].payload.text), 'клиенту показали техническую ошибку');
+  assert.strictEqual(tgSent().filter(c => String(c.payload.chat_id) === '777001').length, 1, 'владелица не узнала о сообщении');
+});
+
+t('если Z.ai ответил ошибкой — клиент получает запасную фразу, а не тишину', () => {
+  const saved = global.ZAI_KEY;
+  global.ZAI_KEY = 'BADKEY-401';
+  TG_CALLS.length = 0;
+  tgPost(secret(), { update_id: 24, message: { from: { id: 666 }, chat: { id: 666, type: 'private' }, text: 'а что входит в сайт?' } });
+  global.ZAI_KEY = saved;
+  const toUser = tgSent().filter(c => c.payload.chat_id === 666);
+  assert.strictEqual(toUser.length, 1);
+  assert.ok(/BADKEY|401/.test(toUser[0].payload.text) === false, toUser[0].payload.text);
+  assert.ok(toUser[0].payload.text.length > 40, 'ответ слишком короткий: ' + toUser[0].payload.text);
+});
+
+t('testAiHead: проверка «головы» из редактора пишет в журнал и в Telegram', () => {
+  TG_CALLS.length = 0;
+  const r = global.testAiHead();
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.ok(/30 000/.test(r.answer), r.answer);
+  assert.ok(tgSent().some(c => /ПРОВЕРКА|Проверка/.test(c.payload.text)), 'нет сообщения о проверке');
+});
+
+t('aiTest по ссылке из админки требует токен и возвращает ответ ИИ', () => {
+  assert.strictEqual(call({ action: 'aiTest' }).ok, false, 'aiTest работает без токена!');
+  const r = call({ action: 'aiTest', token: TOKEN });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.ai, true);
+  assert.ok(/30 000/.test(r.answer), r.answer);
+});
+
+/* ---------- 9c. КРАСИВАЯ ТАБЛИЦА: без пустых колонок, по-русски, текст целиком ---------- */
+t('таблица лидов: ровно 8 колонок, пустых справа нет', () => {
+  const sh = DB.getSheetByName('Лиды услуги');
+  global.tidyAll();
+  assert.strictEqual(sh.maxCols, 8, 'колонок: ' + sh.maxCols);
+  assert.strictEqual(sh.v[0].length, 8);
+});
+
+t('заголовки — по-русски, и все на месте', () => {
+  const head = DB.getSheetByName('Лиды услуги').v[0];
+  assert.deepStrictEqual(head, ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус', 'Источник']);
+  head.forEach(h => assert.ok(h && /[а-яА-Я]/.test(h), 'заголовок не по-русски: ' + h));
+});
+
+t('шапка оформлена: фирменный фон, белый жирный текст, закреплена', () => {
+  const sh = DB.getSheetByName('Лиды услуги');
+  assert.strictEqual(sh.style['1:1:bg'], '#4C2E9E', 'фон шапки: ' + sh.style['1:1:bg']);
+  assert.strictEqual(sh.style['1:1:color'], '#FFFFFF');
+  assert.strictEqual(sh.style['1:8:bold'], 'bold');
+  assert.strictEqual(sh.frozen, 1, 'шапка не закреплена');
+});
+
+t('длинный текст — с переносом и в широкой колонке, ничего не обрезано', () => {
+  const sh = DB.getSheetByName('Лиды услуги');
+  const n = sh.v.length;
+  assert.ok(sh.widths[6] >= 520, 'колонка «Комментарий» узкая: ' + sh.widths[6]);
+  for (let r = 2; r <= n; r++) assert.strictEqual(sh.style[r + ':6:wrap'], true, 'в строке ' + r + ' нет переноса текста');
+  assert.deepStrictEqual(sh.resized, [2, n - 1], 'высота строк не подобрана по содержимому');
+  assert.strictEqual(sh.style['2:1:valign'], 'top', 'текст не прижат к верху');
+});
+
+t('диалог на 25 000 знаков сохраняется ЦЕЛИКОМ (лимит Google — 50 000)', () => {
+  const long = Array.from({ length: 500 }, (_, i) => 'Клиент: строка диалога номер ' + (i + 1) + ' — вопрос про сайт и цены.').join('\n');
+  assert.ok(long.length > 25000, 'тестовый текст короткий: ' + long.length);
+  const r = call({ action: 'leadusl', salon: 'Длинный Диалог', name: 'Т', contact: '70000000008', want: 'Сайт', comment: long });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  const row = DB.getSheetByName('Лиды услуги').v.slice(-1)[0];
+  assert.strictEqual(row[5].length, long.length, 'сохранено ' + row[5].length + ' из ' + long.length);
+  assert.strictEqual(row[5], long, 'текст диалога искажён');
+});
+
+t('заявка из чата салона: лист «Заявки из чата» тоже по размеру и с переносом', () => {
+  call({ action: 'lead', name: 'Клиент Салона', contact: '+7 900 000-00-00', message: 'длинный диалог\n'.repeat(200), source: 'eclat-assistant' });
+  const sh = DB.getSheetByName('Заявки из чата');
+  global.tidyAll();
+  assert.strictEqual(sh.maxCols, 5, 'колонок: ' + sh.maxCols);
+  assert.strictEqual(sh.widths[4], 620, 'ширина диалога: ' + sh.widths[4]);
+  assert.strictEqual(sh.style['1:4:bg'], '#4C2E9E', 'шапка не оформлена');
+  assert.strictEqual(sh.frozen, 1);
+});
+
+t('новая таблица создаётся без пустой вкладки «Sheet1»', () => {
+  const fresh = new Spreadsheet('свежая');
+  const s1 = new Sheet('Sheet1');
+  fresh.sheets.push(s1);
+  const savedCreate = global.SpreadsheetApp.create, savedOpen = global.SpreadsheetApp.openById, savedId = PROPS['USL_DB_ID'];
+  global.SpreadsheetApp.create = () => fresh;
+  global.SpreadsheetApp.openById = () => fresh;
+  PROPS['USL_DB_ID'] = 'FRESH_ID';
+  const r = call({ action: 'leadusl', salon: 'Свежая Таблица', name: 'Т', contact: '70000000009', want: 'Сайт', comment: 'первая заявка' });
+  global.SpreadsheetApp.create = savedCreate; global.SpreadsheetApp.openById = savedOpen;
+  if (savedId === undefined) delete PROPS['USL_DB_ID']; else PROPS['USL_DB_ID'] = savedId;
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(fresh.getSheets().length, 1, 'вкладок: ' + fresh.getSheets().map(x => x.name).join(','));
+  assert.strictEqual(fresh.getSheets()[0].name, 'Лиды услуги');
+  assert.deepStrictEqual(fresh.getSheets()[0].v[0], ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус', 'Источник']);
+  assert.strictEqual(fresh.getSheets()[0].maxCols, 8, 'пустые колонки остались: ' + fresh.getSheets()[0].maxCols);
+});
+
+t('tidyAll убирает пустую вкладку «Sheet1» из рабочей таблицы', () => {
+  const junk = new Sheet('Sheet1');
+  DB.sheets.push(junk);
+  global.tidyAll();
+  assert.strictEqual(DB.getSheetByName('Sheet1'), null, 'пустая вкладка не удалена');
+  assert.ok(DB.getSheetByName('Записи'), 'рабочие листы задеты');
 });
 
 /* ---------- 10. журнал ---------- */
