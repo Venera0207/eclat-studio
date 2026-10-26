@@ -6,11 +6,15 @@
 <title>Сайты и чат-боты для салонов красоты — Венера Тенюшева</title>
 <meta name="description" content="Сайт с онлайн-записью, админкой и чат-ботом для парикмахерской или салона красоты. Живой пример, видео-презентация, цены от 30 000 ₽.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E✂️%3C/text%3E%3C/svg%%">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{--bg:#0b0b14;--card:#151522;--line:#26263a;--violet:#7c3aed;--mag:#ff2ec4;--milk:#edebf4;--mut:#9a96ae;--deep:#4c2e9e}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--milk);font:16px/1.55 "Segoe UI",system-ui,sans-serif}
 .wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+.tg-badge{position:fixed;top:0;left:0;right:0;z-index:99;text-align:center;font-size:12px;letter-spacing:.3px;
+  padding:6px 10px;background:linear-gradient(90deg,var(--deep),var(--violet));color:#fff}
+.in-tg body{padding-top:30px}
 header{padding:18px 0;border-bottom:1px solid var(--line)}
 header .wrap{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
 .logo{font-weight:800;font-size:20px;letter-spacing:.4px}
@@ -140,6 +144,25 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 (function () {
   'use strict';
   var PIPE = (window.SETTINGS && SETTINGS.pipeUrl) ? SETTINGS.pipeUrl : '';
+
+  /* МИНИ-АПП: если страницу открыли внутри Telegram (кнопкой бота) —
+     разворачиваем на весь экран и помечаем заявку, откуда она пришла. */
+  var TG = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+  var IN_TG = !!(TG && TG.initData);
+  if (TG) {
+    try {
+      TG.ready(); TG.expand();
+      if (TG.setHeaderColor) TG.setHeaderColor('#0b0b14');
+      if (TG.setBackgroundColor) TG.setBackgroundColor('#0b0b14');
+    } catch (e) {}
+  }
+  if (IN_TG) {
+    document.documentElement.classList.add('in-tg');
+    var badge = document.createElement('div');
+    badge.className = 'tg-badge';
+    badge.textContent = 'Вы открыли страницу в Telegram';
+    document.body.appendChild(badge);
+  }
   function jsonp(url, params, cb, fail) {
     var name = 'usl_cb_' + Math.random().toString(36).slice(2);
     var sc = document.createElement('script'), done = false;
@@ -155,7 +178,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     return fetch('https://formsubmit.co/ajax/venera.web.4@gmail.com', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ _subject: 'Заявка на сайт для салона: ' + (v.salon || v.name), _template: 'table', _captcha: 'false',
-        'Салон': v.salon, 'Имя': v.name, 'Контакт': v.contact, 'Интересует': v.want, 'Комментарий': v.comment })
+        'Салон': v.salon, 'Имя': v.name, 'Контакт': v.contact, 'Интересует': v.want, 'Комментарий': v.comment,
+        'Источник': IN_TG ? 'мини-апп Telegram' : 'лендинг' })
     }).then(function (r) { return r.json(); }).then(function (j) { return !!(j && (j.success === 'true' || j.success === true)); });
   }
   document.getElementById('f').addEventListener('submit', function (e) {
@@ -166,9 +190,15 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     };
     if (v.contact.replace(/\D/g, '').length < 6 && !v.contact) { f.contact.focus(); return; }
     var btn = f.querySelector('button'); btn.disabled = true; btn.textContent = 'Отправляем…';
-    function ok() { f.style.display = 'none'; document.getElementById('form-ok').style.display = 'block'; }
+    function ok() {
+      f.style.display = 'none';
+      var msg = document.getElementById('form-ok');
+      msg.style.display = 'block';
+      if (IN_TG) msg.innerHTML += '<br><span style="opacity:.75;font-size:14px">Окно можно закрыть — заявка уже у меня.</span>';
+      try { if (IN_TG && TG.HapticFeedback) TG.HapticFeedback.notificationOccurred('success'); } catch (e) {}
+    }
     function backup() { formSubmitBackup(v).then(ok, ok); }   /* письмо-дублёр; если и оно молчит — всё равно показываем успех и позвоним сами */
-    if (PIPE) jsonp(PIPE, { action: 'leadusl', salon: v.salon, name: v.name, contact: v.contact, want: v.want, comment: v.comment },
+    if (PIPE) jsonp(PIPE, { action: 'leadusl', salon: v.salon, name: v.name, contact: v.contact, want: v.want, comment: v.comment, src: (IN_TG ? 'telegram-miniapp' : 'landing') },
       function (d) { if (d && d.ok) ok(); else backup(); }, backup);
     else backup();
   });
