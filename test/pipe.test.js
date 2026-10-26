@@ -94,16 +94,44 @@ global.CacheService = {
 global.PropertiesService = { getScriptProperties: () => ({ getProperty: k => PROPS[k], setProperty: (k, v) => { PROPS[k] = v; } }) };
 global.LockService = { getScriptLock: () => ({ waitLock: () => true, releaseLock: () => true }) };
 global.MailApp = { sendEmail: (to, subj, body) => SENT_MAIL.push({ to, subj, body }) };
-global.ScriptApp = { getProjectTriggers: () => [], deleteTrigger: () => {}, newTrigger: () => ({ timeBased: () => ({ everyHours: () => ({ create: () => {} }) }) }) };
+global.ScriptApp = {
+  getProjectTriggers: () => [], deleteTrigger: () => {},
+  newTrigger: () => ({ timeBased: () => ({ everyHours: () => ({ create: () => {} }) }) }),
+  getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' })
+};
+global.Logger = { log: (t) => LOGS.push(String(t)) };
+
+/* --- эмуляция Telegram Bot API: запоминаем все обращения к боту --- */
+const TG_CALLS = [];
+let TG_UPDATES = [];                                     /* что бот «видит» в getUpdates */
+let TG_ME = { ok: true, result: { username: 'venera_leads_test_bot', first_name: 'Тест' } };
+function tgResp(obj) { return { getResponseCode: () => 200, getContentText: () => JSON.stringify(obj) }; }
 global.UrlFetchApp = {
-  fetch: (url) => {
+  fetch: (url, opts) => {
+    opts = opts || {};
     if (/site-data\.js/.test(url)) {
-      return { getContentText: () => fs.readFileSync(path.join(__dirname, '..', 'site-data.js'), 'utf8') };
+      return { getContentText: () => fs.readFileSync(path.join(__dirname, '..', 'site-data.js'), 'utf8'),
+               getResponseCode: () => 200 };
     }
-    return { getContentText: () => '' };
+    const tg = /api\.telegram\.org\/bot([^/]+)\/(\w+)/.exec(url);
+    if (tg) {
+      const method = tg[2];
+      let payload = {};
+      try { payload = JSON.parse(opts.payload || '{}'); } catch (e) {}
+      TG_CALLS.push({ method, payload, token: tg[1] });
+      if (method === 'getMe') return tgResp(TG_ME);
+      if (method === 'getUpdates') return tgResp({ ok: true, result: TG_UPDATES });
+      if (method === 'sendMessage') {
+        return tgResp(payload.chat_id ? { ok: true, result: { message_id: TG_CALLS.length } }
+                                      : { ok: false, description: 'Bad Request: chat_id is empty' });
+      }
+      return tgResp({ ok: true, result: true });
+    }
+    return { getContentText: () => '', getResponseCode: () => 200 };
   }
 };
 global.Utilities = {
+  getUuid: () => 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
   formatDate: (d, tz, pattern) => {
     const p = n => String(n).padStart(2, '0');
     return pattern
@@ -113,7 +141,7 @@ global.Utilities = {
 };
 global.Session = { getScriptTimeZone: () => 'Etc/GMT' };
 global.ContentService = {
-  MimeType: { JAVASCRIPT: 'javascript' },
+  MimeType: { JAVASCRIPT: 'javascript', JSON: 'JSON' },
   createTextOutput: (t) => ({ setMimeType: () => ({ getContent: () => t, text: t }) })
 };
 
@@ -121,7 +149,10 @@ global.ContentService = {
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'backend', 'appsscript.gs'), 'utf8');
 /* в репозитории токен — плейсхолдер; для теста подставляем свой, не трогая файл */
 const TOKEN = 'ECLAT-TEST-TOKEN';
-(0, eval)(SRC.replace("var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';", 'var ADMIN_TOKEN = ' + JSON.stringify(TOKEN) + ';'));
+const LEAD_TOKEN = '123456:TEST-LEAD-BOT';
+(0, eval)(SRC
+  .replace("var ADMIN_TOKEN = 'ВСТАВЬТЕ_СВОЙ_ТОКЕН';", 'var ADMIN_TOKEN = ' + JSON.stringify(TOKEN) + ';')
+  .replace("var LEAD_BOT_TOKEN = 'ВСТАВЬТЕ_ТОКЕН_БОТА_ЗАЯВОК';", 'var LEAD_BOT_TOKEN = ' + JSON.stringify(LEAD_TOKEN) + ';'));
 
 if (global.ADMIN_TOKEN === 'ВСТАВЬТЕ_СВОЙ_ТОКЕН') {
   console.error('Тест не смог подменить ADMIN_TOKEN — проверьте строку объявления в appsscript.gs');
@@ -510,7 +541,144 @@ t('leadusl не мешает записям салона: лист «Запис�
   assert.strictEqual(DB.getSheetByName('Записи').v.length, n);
 });
 
-/* ---------- 9. журнал ---------- */
+/* ---------- 9. бот заявок: Telegram + мини-апп ---------- */
+const tgPost = (tgParam, update) =>
+  JSON.parse(global.doPost({ parameter: { tg: tgParam }, postData: { contents: JSON.stringify(update) } }).getContent());
+const tgSent = () => TG_CALLS.filter(c => c.method === 'sendMessage');
+const secret = () => global.PropertiesService.getScriptProperties().getProperty('LEAD_TG_SECRET');
+
+t('ping честен про бота заявок: версия 2.3, бот и chat_id на месте', () => {
+  const r = call({ action: 'ping' });
+  assert.strictEqual(r.version, 2.3);
+  assert.strictEqual(r.leadBot, true, 'бот не подключён');
+  assert.strictEqual(r.leadUsl, true);
+});
+
+t('setupLeadBot: сам находит chat_id, ставит мини-апп кнопку, команды и вебхук', () => {
+  TG_CALLS.length = 0;
+  TG_UPDATES = [{ update_id: 1, message: { message_id: 1, from: { id: 777001 },
+    chat: { id: 777001, type: 'private', first_name: 'Венера' }, text: 'привет' } }];
+  const r = global.setupLeadBot();
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.chatId, '777001');
+  const methods = TG_CALLS.map(c => c.method);
+  ['getMe', 'getUpdates', 'setChatMenuButton', 'setMyCommands', 'setDescription', 'setWebhook', 'sendMessage']
+    .forEach(m => assert.ok(methods.indexOf(m) >= 0, 'не вызван ' + m + '; было: ' + methods.join(',')));
+  const mb = TG_CALLS.filter(c => c.method === 'setChatMenuButton')[0];
+  assert.strictEqual(mb.payload.menu_button.type, 'web_app', 'кнопка-меню не мини-апп');
+  assert.ok(/uslugi\/$/.test(mb.payload.menu_button.web_app.url), 'мини-апп ведёт не на лендинг: ' + mb.payload.menu_button.web_app.url);
+  const wh = TG_CALLS.filter(c => c.method === 'setWebhook')[0];
+  assert.ok(/[?&]tg=[a-z0-9]{16,}$/.test(wh.payload.url), 'вебхук без секрета: ' + wh.payload.url);
+  assert.ok(TG_CALLS.every(c => c.token === LEAD_TOKEN), 'бот заявок дёргается чужим токеном');
+  assert.ok(secret(), 'секрет вебхука не сохранён');
+});
+
+t('leadusl: заявка приходит в Telegram владельцу бота', () => {
+  TG_CALLS.length = 0;
+  const r = call({ action: 'leadusl', salon: 'Бархат', name: 'Ольга', contact: '+7 917 000-00-00',
+                   want: 'Бот', comment: 'Казань, 3 мастера', src: 'telegram-miniapp' });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.tg, true, 'телеграм не отправлен: ' + JSON.stringify(r));
+  assert.strictEqual(r.src, 'мини-апп Telegram');
+  assert.strictEqual(tgSent().length, 1);
+  assert.strictEqual(String(tgSent()[0].payload.chat_id), '777001');
+  const txt = tgSent()[0].payload.text;
+  ['Бархат', 'Ольга', '+7 917 000-00-00', 'Бот', 'мини-апп Telegram'].forEach(x =>
+    assert.ok(txt.indexOf(x) >= 0, 'в сообщении нет «' + x + '»: ' + txt));
+});
+
+t('leadusl: «Источник» попадает в таблицу и в письмо', () => {
+  const sh = DB.getSheetByName('Лиды услуги');
+  assert.strictEqual(sh.v[0].length, 8, 'шапка: ' + sh.v[0].join('|'));
+  assert.strictEqual(sh.v[0][7], 'Источник');
+  const row = sh.v[sh.v.length - 1];
+  assert.strictEqual(row[7], 'мини-апп Telegram');
+  assert.ok(/мини-апп Telegram/.test(SENT_MAIL[SENT_MAIL.length - 1].body), 'в письме нет источника');
+});
+
+t('старая таблица лидов на 7 колонок сама доучивается до 8', () => {
+  const sh = DB.getSheetByName('Лиды услуги');
+  sh.v[0] = ['Дата', 'Салон', 'Контактное лицо', 'Контакт', 'Что интересует', 'Комментарий', 'Статус'];
+  call({ action: 'leadusl', salon: 'Ремонт шапки', name: 'А', contact: '70000000001', want: 'Сайт', comment: '' });
+  assert.strictEqual(sh.v[0].length, 8, 'шапка не починена: ' + sh.v[0].join('|'));
+  assert.strictEqual(sh.v[0][7], 'Источник');
+});
+
+t('без токена бота заявка всё равно сохраняется (таблица + письмо)', () => {
+  const saved = global.LEAD_BOT_TOKEN;
+  global.LEAD_BOT_TOKEN = 'ВСТАВЬТЕ_ТОКЕН_БОТА_ЗАЯВОК';
+  TG_CALLS.length = 0;
+  const mails = SENT_MAIL.length;
+  const r = call({ action: 'leadusl', salon: 'БезБота', name: 'Н', contact: '70000000002', want: 'Сайт', comment: '' });
+  global.LEAD_BOT_TOKEN = saved;
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(r.tg, false, 'телеграм «отправился» без токена');
+  assert.strictEqual(tgSent().length, 0);
+  assert.strictEqual(SENT_MAIL.length, mails + 1, 'письмо не ушло');
+});
+
+t('бот отвечает на /start кнопкой мини-аппа', () => {
+  TG_CALLS.length = 0;
+  const r = tgPost(secret(), { update_id: 9, message: { message_id: 9, from: { id: 555 },
+    chat: { id: 555, type: 'private' }, text: '/start' } });
+  assert.strictEqual(r.ok, true, JSON.stringify(r));
+  assert.strictEqual(tgSent().length, 1);
+  assert.strictEqual(tgSent()[0].payload.chat_id, 555);
+  const kb = tgSent()[0].payload.reply_markup.inline_keyboard[0][0];
+  assert.ok(kb.web_app && /uslugi\/$/.test(kb.web_app.url), 'в /start нет кнопки мини-аппа');
+});
+
+t('/price отвечает ценами «от 30 000 ₽»', () => {
+  TG_CALLS.length = 0;
+  tgPost(secret(), { update_id: 11, message: { chat: { id: 555 }, text: '/price' } });
+  assert.strictEqual(tgSent().length, 1);
+  const txt = tgSent()[0].payload.text;
+  assert.ok((txt.match(/30 000 ₽/g) || []).length >= 3, 'цены не все: ' + txt);
+  assert.ok(/50\/50/.test(txt), 'нет условия оплаты');
+});
+
+t('живой текст: человек получает ответ, владелица — уведомление со ссылкой «ответить»', () => {
+  TG_CALLS.length = 0;
+  tgPost(secret(), { update_id: 12, message: { from: { id: 888, username: 'salon_kzn' },
+    chat: { id: 888, type: 'private' }, text: 'Здравствуйте, хочу сайт для салона, Казань' } });
+  assert.strictEqual(tgSent().length, 2, 'должно быть два сообщения: ' + JSON.stringify(tgSent().map(x => x.payload.chat_id)));
+  assert.strictEqual(tgSent()[0].payload.chat_id, 888);
+  assert.ok(tgSent()[0].payload.reply_markup.inline_keyboard[0][0].web_app, 'в ответе нет кнопки мини-аппа');
+  assert.strictEqual(String(tgSent()[1].payload.chat_id), '777001', 'владелице не пришло уведомление');
+  const note = tgSent()[1].payload.text;
+  assert.ok(/salon_kzn/.test(note), 'в уведомлении нет ника: ' + note);
+  assert.ok(/t\.me\/salon_kzn/.test(note), 'нет ссылки «ответить»: ' + note);
+  assert.ok(/Казань/.test(note), 'текст клиента потерялся');
+});
+
+t('просто «привет» — приветствие без лишнего уведомления владелице', () => {
+  TG_CALLS.length = 0;
+  tgPost(secret(), { update_id: 14, message: { from: { id: 999 }, chat: { id: 999, type: 'private' }, text: 'привет' } });
+  assert.strictEqual(tgSent().length, 1, 'сообщений: ' + tgSent().length);
+  assert.strictEqual(tgSent()[0].payload.chat_id, 999);
+});
+
+t('/site даёт кнопку мини-аппа и ничего лишнего', () => {
+  TG_CALLS.length = 0;
+  tgPost(secret(), { update_id: 15, message: { chat: { id: 999 }, text: '/site' } });
+  assert.strictEqual(tgSent().length, 1);
+  assert.ok(/uslugi\/$/.test(tgSent()[0].payload.reply_markup.inline_keyboard[0][0].web_app.url));
+});
+
+t('чужой запрос на вебхук (неверный секрет) бота не дёргает', () => {
+  TG_CALLS.length = 0;
+  const r = tgPost('неверный-секрет', { update_id: 13, message: { chat: { id: 1 }, text: '/start' } });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(tgSent().length, 0);
+});
+
+t('doPost с обычными данными сайта работает как раньше', () => {
+  const r = JSON.parse(global.doPost({ parameter: {}, postData: { contents: JSON.stringify({ action: 'ping' }) } }).getContent());
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.version, 2.3);
+});
+
+/* ---------- 10. журнал ---------- */
 t('журнал пишет события', () => {
   const s = DB.getSheetByName('Журнал');
   assert.ok(s && s.getLastRow() > 2, 'журнал пуст');
