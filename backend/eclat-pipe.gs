@@ -1,5 +1,5 @@
 /* =====================================================================
-   ÉCLAT STUDIO — труба ИИ-ассистента салона (Google Apps Script), v2
+   ÉCLAT STUDIO — труба ИИ-ассистента салона (Google Apps Script), v2.2
    ---------------------------------------------------------------------
    Живёт ОТДЕЛЬНО от трубы записи (backend/appsscript.gs) и от других
    проектов Венеры: своя таблица, свой бот, свои листы «Заявки»/«Диалоги».
@@ -27,6 +27,12 @@
      test / ping — диагностика
      setwebhook — повесить Telegram-вебхук на этот скрипт
 
+   v2.2 — КРАСИВЫЕ ТАБЛИЦЫ: заголовки по-русски («Код диалога» вместо SID),
+     фирменная шапка, ни одной лишней пустой колонки и вкладки, перенос строк
+     в длинных текстах и высота строки по содержимому — диалог виден целиком;
+     тексты диалогов сохраняются ПОЛНОСТЬЮ (до 40 000 знаков в заявке и
+     45 000 в журнале при лимите Google 50 000). Приборка по команде tidyAll.
+
    УСТАНОВКА: backend/eclat-pipe-README.md и «ПРОЧТИ-МЕНЯ-БОТ.txt»
    ===================================================================== */
 
@@ -43,10 +49,14 @@ var TZ = 'Europe/Moscow';
 var LEAD_SHEET = 'Заявки';
 var LOG_SHEET  = 'Диалоги';
 var LEAD_HEAD  = ['Дата', 'Имя', 'Контакт', 'Заявка (весь диалог)', 'Источник'];
-var LOG_HEAD   = ['Дата', 'SID', 'Страница', 'Контакт', 'Весь диалог', 'Итог'];
+var LOG_HEAD   = ['Дата', 'Код диалога', 'Страница', 'Контакт', 'Весь диалог', 'Итог'];
 var LEAD_TEXT_COLS = [2, 3, 4, 5];   // Имя, Контакт, диалог, источник — только текстом
 var LOG_TEXT_COLS  = [2, 3, 4, 5, 6];
 var CATALOG_CACHE = 'eclat_assistant_catalog';
+/* Сколько текста храним в одной ячейке: лимит Google — 50 000 знаков,
+   берём с запасом, чтобы диалог сохранялся ЦЕЛИКОМ и ничего не обрезалось. */
+var FULL_LEAD = 40000;
+var FULL_LOG  = 45000;
 
 /* ============================== HTTP ============================== */
 function doGet(e) {
@@ -56,7 +66,7 @@ function doGet(e) {
   var out;
   try {
     switch (action) {
-      case 'ping': out = { ok: true, time: iso(new Date()), version: 2 }; break;
+      case 'ping': out = { ok: true, time: iso(new Date()), version: 2.2, pretty: true }; break;
       case 'test': out = doTest(); break;
       case 'chat': out = doChat(p); break;
       case 'lead': out = doLead(p); break;
@@ -65,12 +75,13 @@ function doGet(e) {
         notify('🚨 ÉCLAT: ' + (p.text || 'внимание'));
         out = { ok: true };
         break;
+      case 'tidy': tidyAll(); out = { ok: true, message: 'Таблицы приведены в порядок' }; break;
       case 'setwebhook':
         out = JSON.parse(UrlFetchApp.fetch('https://api.telegram.org/bot' + BOT_TOKEN +
           '/setWebhook?url=' + encodeURIComponent(ScriptApp.getService().getUrl())).getContentText());
         break;
       default: out = { ok: false, error: 'Unknown action: ' + action,
-                       hint: 'Доступные: ping, test, chat, lead, log, alert, setwebhook' };
+                       hint: 'Доступные: ping, test, chat, lead, log, alert, tidy, setwebhook' };
     }
   } catch (err) {
     out = { ok: false, error: String(err && err.message || err) };
@@ -100,7 +111,7 @@ function doPost(e) {
 
 function doTest() {
   var c = safeCatalog();
-  return { ok: true, version: 2.1, pretty: true, time: iso(new Date()),
+  return { ok: true, version: 2.2, pretty: true, time: iso(new Date()),
            zaiKeySet: hasZai(), botTokenSet: hasBot(), chatIdSet: hasChat(),
            catalogOk: !!c.ok, services: c.SERVICES.length, masters: c.MASTERS.length,
            siteDataUrl: SITE_DATA_URL };
@@ -173,15 +184,16 @@ function systemPrompt() {
 function doLead(p) {
   var name = String(p.name || '').slice(0, 80);
   var contact = String(p.contact || '').slice(0, 60);
-  var message = String(p.message || '').slice(0, 8000);
+  var message = String(p.message || '').slice(0, FULL_LEAD);   // диалог ЦЕЛИКОМ
   var source = String(p.source || 'ассистент');
   var sheet = false, tg = false, mail = false;
 
   /* 1) таблица — главная копия */
   try {
     var leadSh = sheetNamed(LEAD_SHEET, LEAD_HEAD);
+    ensureHead(leadSh, LEAD_HEAD);
     appendRowText(leadSh, [new Date(), name, contact, message, source], LEAD_TEXT_COLS);
-    beautify(leadSh, LEAD_WIDTHS, [4], [1]);
+    beautify(leadSh, LEAD_WIDTHS, [2, 3, 4, 5], [1]);
     sheet = true;
   } catch (err) {}
 
@@ -209,9 +221,10 @@ function doLead(p) {
 /* журнал: одна строка на разговор, дообновляется по sid */
 function doLog(p) {
   var sh = sheetNamed(LOG_SHEET, LOG_HEAD);
+  ensureHead(sh, LOG_HEAD);
   var sid = String(p.sid || '');
   var client = String(p.client || '');
-  var dialogue = String(p.bot || '').slice(0, 20000);
+  var dialogue = String(p.bot || '').slice(0, FULL_LOG);      // весь диалог, без обрезки
   var outcome = String(p.outcome || '');
   if (sid) {
     var v = sh.getDataRange().getValues();
@@ -220,13 +233,13 @@ function doLog(p) {
         if (client) sh.getRange(i + 1, 4).setValue(client);
         sh.getRange(i + 1, 5).setValue(dialogue);
         sh.getRange(i + 1, 6).setValue(outcome);
-        beautify(sh, LOG_WIDTHS, [5], [1]);
+        beautify(sh, LOG_WIDTHS, [2, 3, 4, 5, 6], [1]);
         return { ok: true, updated: sid };
       }
     }
   }
   appendRowText(sh, [new Date(), sid, String(p.page || ''), client, dialogue, outcome], LOG_TEXT_COLS);
-  beautify(sh, LOG_WIDTHS, [5], [1]);
+  beautify(sh, LOG_WIDTHS, [2, 3, 4, 5, 6], [1]);
   return { ok: true, created: sid };
 }
 
@@ -275,23 +288,82 @@ function sendWelcome(chatId) {
   } catch (e) {}
 }
 
-/* ---------- КРАСОТА ТАБЛИЦ: читаемо с первого взгляда ----------
-   ширины колонок, перенос текста в длинных колонках, точное время
-   «дд.мм.гггг чч:мм:сс», закреплённая шапка, жирные заголовки и
-   удаление пустых колонок справа, чтобы таблица была «по размеру». */
+/* ---------- КРАСОТА ТАБЛИЦ: красиво сразу, без ручной приборки ----------
+   Один вызов делает всё:
+     1. колонок ровно по числу заголовков — пустых справа не остаётся;
+     2. пустой хвост строк снизу подрезается;
+     3. шапка по-русски, жирная, белым по фирменному фиолетовому, закреплена;
+     4. длинные тексты — с переносом, в широких колонках, выравнивание вверх:
+        диалог не обрезается границей колонки;
+     5. высота строки подбирается по содержимому (предел Google ~409 px:
+        очень длинный диалог хранится в ячейке ЦЕЛИКОМ, показывается начало —
+        чтобы дочитать, потяните нижнюю границу строки вниз);
+     6. чётные строки светло-сиреневые — глазами не теряешься.              */
+var HEAD_BG = '#4C2E9E';
+var ZEBRA_BG = '#F6F3FC';
+
 function beautify(sh, widths, wrapCols, dateCols) {
   try {
-    var i, rows = Math.max(sh.getLastRow() - 1, 1);
+    var i, last = sh.getLastRow(), rows = Math.max(last - 1, 0);
     for (i = 0; i < widths.length; i++) sh.setColumnWidth(i + 1, widths[i]);
     if (sh.getMaxColumns() > widths.length) sh.deleteColumns(widths.length + 1, sh.getMaxColumns() - widths.length);
-    for (i = 0; i < wrapCols.length; i++) sh.getRange(2, wrapCols[i], rows, 1).setWrap(true).setVerticalAlignment('top');
-    for (i = 0; i < dateCols.length; i++) sh.getRange(2, dateCols[i], rows, 1).setNumberFormat('dd.mm.yyyy hh:mm:ss');
+    try {
+      var maxR = sh.getMaxRows();
+      if (maxR > last + 30) sh.deleteRows(last + 1, maxR - last - 30);
+    } catch (e2) {}
+    try {
+      sh.getRange(1, 1, 1, widths.length)
+        .setFontWeight('bold').setFontColor('#FFFFFF').setBackground(HEAD_BG)
+        .setHorizontalAlignment('center').setVerticalAlignment('middle');
+      sh.setRowHeight(1, 32);
+    } catch (e3) {}
     sh.setFrozenRows(1);
-    sh.getRange(1, 1, 1, widths.length).setFontWeight('bold');
+    if (rows > 0) {
+      try { sh.getRange(2, 1, rows, widths.length).setVerticalAlignment('top'); } catch (e4) {}
+      for (i = 0; i < wrapCols.length; i++) { try { sh.getRange(2, wrapCols[i], rows, 1).setWrap(true); } catch (e5) {} }
+      for (i = 0; i < dateCols.length; i++) { try { sh.getRange(2, dateCols[i], rows, 1).setNumberFormat('dd.mm.yyyy hh:mm:ss').setWrap(false); } catch (e6) {} }
+      try { sh.autoResizeRows(2, rows); } catch (e7) {}
+      try { if (last >= 2) sh.getRange(last, 1, 1, widths.length).setBackground(last % 2 === 0 ? ZEBRA_BG : '#FFFFFF'); } catch (e8) {}
+    }
   } catch (e) {}
 }
-var LEAD_WIDTHS = [150, 110, 135, 480, 110];
-var LOG_WIDTHS  = [150, 150, 110, 120, 560, 90];
+/* диалог — самая широкая колонка: текст читается без обрезки */
+var LEAD_WIDTHS = [150, 110, 140, 620, 120];
+var LOG_WIDTHS  = [150, 150, 110, 120, 640, 100];
+
+/* шапка обязана совпадать с HEAD: переименовали колонку — старая таблица доучится сама */
+function ensureHead(sh, head) {
+  try {
+    var cur = sh.getRange(1, 1, 1, head.length).getValues()[0] || [];
+    for (var i = 0; i < head.length; i++) {
+      if (String(cur[i] == null ? '' : cur[i]) !== head[i]) { sh.getRange(1, 1, 1, head.length).setValues([head]); return true; }
+    }
+  } catch (e) {}
+  return false;
+}
+/* пустая вкладка «Sheet1», остающаяся при создании таблицы, — удаляем */
+function dropEmptyTabs(sp) {
+  try {
+    var sheets = sp.getSheets();
+    if (!sheets || sheets.length < 2) return;
+    for (var i = 0; i < sheets.length; i++) {
+      var n = String(sheets[i].getName() || '').toLowerCase();
+      if ((n === 'sheet1' || n === 'лист1' || n === 'страница1') &&
+          sheets[i].getLastRow() === 0 && sheets[i].getLastColumn() === 0) {
+        try { sp.deleteSheet(sheets[i]); } catch (e) {}
+      }
+    }
+  } catch (e) {}
+}
+/* одна команда — обе таблицы в порядке (можно звать сколько угодно раз) */
+function tidyAll() {
+  var l = ss().getSheetByName(LEAD_SHEET);
+  if (l) { ensureHead(l, LEAD_HEAD); beautify(l, LEAD_WIDTHS, [2, 3, 4, 5], [1]); }
+  var g = ss().getSheetByName(LOG_SHEET);
+  if (g) { ensureHead(g, LOG_HEAD); beautify(g, LOG_WIDTHS, [2, 3, 4, 5, 6], [1]); }
+  dropEmptyTabs(ss());
+  return true;
+}
 
 /* ================== ТАБЛИЦА, КАТАЛОГ, УТИЛИТЫ ================== */
 function ss() {
@@ -305,9 +377,15 @@ function ss() {
   return created;
 }
 function sheetNamed(name, head) {
-  var s = ss().getSheetByName(name);
-  if (!s) { s = ss().insertSheet(name); s.appendRow(head); }
-  else if (s.getLastRow() === 0) s.appendRow(head);
+  var sp = ss();
+  var s = sp.getSheetByName(name);
+  if (!s) {
+    var first = null;
+    try { first = sp.getSheets()[0]; } catch (e) {}
+    if (first && sp.getSheets().length === 1 && first.getLastRow() === 0) { first.setName(name); s = first; }
+    else s = sp.insertSheet(name);
+    s.appendRow(head);
+  } else if (s.getLastRow() === 0) s.appendRow(head);
   return s;
 }
 /* текстовые колонки: два прохода, как в трубе записи — иначе «+7…» = #ERROR! */
