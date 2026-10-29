@@ -22,7 +22,9 @@ var SITE = {
   "close": "22:00",
   "timezone": "Europe/Moscow",
   "mapSrc": "https://yandex.ru/map-widget/v1/?text=%D0%A8%D0%BB%D0%B8%D1%81%D1%81%D0%B5%D0%BB%D1%8C%D0%B1%D1%83%D1%80%D0%B3%D1%81%D0%BA%D0%B8%D0%B9%20%D0%BF%D1%80.%2C%2024%D0%BA1%2C%20%D0%A1%D0%B0%D0%BD%D0%BA%D1%82-%D0%9F%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3&z=17",
-  "socials": []
+  "socials": [
+    { "url": "https://vk.ru/venera.web4", "title": "Сообщество ВК" }
+  ]
 };
 
 /* ---------- РЕЖИМЫ РАБОТЫ САЙТА ---------- */
